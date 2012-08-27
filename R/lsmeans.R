@@ -1,13 +1,20 @@
 lsmeans = function(object, specs, contr=list(), at, cov.reduce = function(x, name) mean(x), 
-                   fac.reduce = function(coefs, lev) apply(coefs, 2, mean), ...) {
+                   fac.reduce = function(coefs, lev) apply(coefs, 2, mean), 
+                   check.cells = TRUE, ...) 
+{
+    
     if (missing(specs)) stop("Must specify specs, e.g. 'pairwise ~ treatment'")
     
-    Terms = delete.response(terms(object))
+# Get RHS of model formula
+    if (class(object) == "gls")
+        Terms = getCovariateFormula(object)
+    else
+        Terms = delete.response(terms(object))
+    # get the pure formula w/o extra stuff
+    formrhs = formula(Terms)
     
-    form = Terms[[2]]
+# Figure out thecall (fixed effects part of model), bhat (=coefs), contrasts attr
     if (inherits(object, "mer")) {
-        for (i in 1:length(form))
-            if (substr(as.character(form[i]),1,1) == "(") form[i] = NULL
         thecall = slot(object, "call")
         bhat = fixef(object)
         contrasts = attr(model.matrix(object), "contrasts")
@@ -17,76 +24,195 @@ lsmeans = function(object, specs, contr=list(), at, cov.reduce = function(x, nam
         bhat = fixef(object)
         contrasts = object$contrasts
     }
+    else if (inherits(object, "gls")) {
+        thecall = object$call
+        bhat = coef(object)
+        contrasts = object$contrasts        
+    }
     else {
         thecall = object$call
         bhat = coef(object)
         contrasts = attr(model.matrix(object), "contrasts")
     }
+    
+    # Fixed-effects covariance matrix -- Happily, vcov works the same way for lm, lme, lmer
     V = vcov(object)
     
-    nm = all.vars(form)
+    # We'll work only with the non-NA elements of bhat
+    used = which(!is.na(bhat))
+    bhat = bhat[used]
+    # should match vcov...
+    if (length(bhat) != nrow(V)) stop("Something's wrong -- Mismatch between vcov() and non-missing coef() results")
+    
+    # All the variables in the model
+    nm = all.vars(formrhs)
+    
+# Figure out if any are coerced to factor or ordered
+    anm = all.names(formrhs)    
+    coerced = anm[1 + grep("factor|ordered", anm)]
+    
+# Obtain a simplified formula -- needed to recover the data in the model    
     form = as.formula(paste("~", paste(nm, collapse = "+")))
     envir = attr(Terms, ".Environment")
     X = model.frame(form, eval(thecall$data, envir=envir), 
                     subset = eval(thecall$subset, envir=envir))
-    baselevs = xlev = list()
-    if (!missing(specs) && !is.list(specs)) specs = list(specs)
-    for (i in 1:length(X))
-        if (is.factor(X[[i]])) {
-            baselevs[[i]] = levels(X[[i]])
-            xlev = c(xlev, baselevs[[i]])
+    # Now X contains the data used to fit the model, w/o any expansions (e.g. poly() calls)
+
+# Start accumulating info for the vars. 
+# baselevs has the levels of all factors, or the "at" values for all covariates
+# xlev has the factor levels only, for use in model.frame and check.cells calls
+    baselevs = xlev = matdat = list()
+    # allow a vector of character strings
+    if (is.character(specs)) specs = as.list(specs)
+    # allow a single formula
+    if (!is.list(specs)) specs = list(specs)
+    
+    for (xname in names(X)) {
+        obj = X[[xname]]
+        if (is.factor(obj)) {            
+            baselevs[[xname]] = xlev[[xname]] = levels(obj)
         }
-    else {
-        xname = names(X)[i]
-        if (!missing(at) && !is.null(at[[xname]]))
-            baselevs[[i]] = at[[xname]]
-        else 
-            baselevs[[i]] = cov.reduce(X[[i]], xname)
+        else if (is.matrix(obj)) {
+            # Matrices -- reduce columns thereof, but don't add to baselevs
+            matdat[[xname]] = apply(obj, 2, cov.reduce, xname)
+        }
+        else {
+            # single numeric pred but coerced to a factor - use unique values
+            if (length(grep(xname, coerced)) > 0)             
+                 baselevs[[xname]] = sort(unique(obj))
+                
+            # Ordinary covariates - summarize if not in 'at' arg
+            else {
+                if (!missing(at) && !is.null(at[[xname]]))
+                    baselevs[[xname]] = at[[xname]]
+                else 
+                    baselevs[[xname]] = cov.reduce(obj, xname)
+            }
+        }
     }
-    names(baselevs) = names(X)
+    # OK. Now make a grid of the factor levels of interest, along w/ covariate "at" values
     grid = do.call("expand.grid", baselevs)
+    # add any matrices
+    for (nm in names(matdat))
+        grid[[nm]] = matrix(rep(matdat[[nm]], each=nrow(grid)), nrow=nrow(grid))
+
+    # It turns out that numerics coerced to factors are a real pain in the butt when it comes
+    # to matching levels. Life will be simpler if we turn them into factors in the X matrix 
+    # and update the base levels accordingly with the same labels
+    for (var in coerced) {
+        X[[var]] = factor(X[[var]])
+        baselevs[[var]] = levels(X[[var]])
+    }
+    
+
+    # Let's also get the list of empty cells while we have X
+    if (check.cells) empties = empty.cells(formrhs, X)
+    else empties = list()
+    
+    # Now make a new dataset with just the factor combs and covariate values we want for prediction
+    # WARNING -- This will overwrite X, so get anything you need from X BEFORE we get here
     m = model.frame(Terms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(Terms, m, contrasts.arg = contrasts)
+    # use only the columns with non-missing regr coefs
+    X = X[ , used]
     
+    # If necessary revise grid with corced numeric factors replaced with factor levels
+    if (length(coerced) > 0) grid = do.call("expand.grid", baselevs)
+    
+    # All factors (excluding covariates)
+    allFacs = c(names(xlev), coerced)
+    
+    
+    
+    # Get a vector of terms in the model, for checking
+    mod.terms = strsplit(as.character(formrhs[2])[[1]], "\\+")[[1]]
+    
+    # routine returns TRUE iff all elements of facs are contained in a model term with another predictor
+    some.term.contains = function(facs) {
+        for (trm in mod.terms) {
+            flag = all(sapply(facs, function(f) length(grep(f,trm))>0))
+            if (flag) 
+                if (length(all.vars(as.formula(paste("~",trm)))) > length(facs)) 
+                    return(TRUE)
+        }
+        return(FALSE)
+    }
+    
+    
+    # Initialize a list to hold the results to return
     results = list()
     for (i in 1:length(specs)) {
         form = specs[[i]]
+        # convert a string to a formula
+        if (is.character(form)) form = as.formula(paste("~",form))
         if (!inherits(form, "formula"))
-            stop("Desired lsmeans should be expressed in formulas")
+            stop(paste("Incorrect formula specification:", form))
         method = byfacs = NULL
         if (length(form) == 3) { # no lhs
             method = all.vars(form[[2]])[1]
             form = form[-2]
         }
+        
+        # These are the variables involved; and the label to use in the results
         facs = all.vars(form)
+        facs.lbl = paste(facs, collapse=":")
+        if (some.term.contains(facs)) 
+            warning(paste("lsmeans of",facs.lbl,
+                          "may be misleading due to interaction with other predictor(s)"))
+        
+        ln = if (any(sapply(facs, function(nm) length(grep(nm, allFacs)) == 0)))
+            stop(paste("Unknown factor(s) in specification:", paste(form, collapse=" ")))
+        
+        # identify "by" factors (after "|" in formula)
         b = strsplit(as.character(form[2]), "\\|")[[1]]
         if (length(b) > 1) byfacs = all.vars(as.formula(paste("~",b[2])))
+        
+        # create the grid of factor combinations
         levs = list()
         for (f in facs) levs[[f]] = baselevs[[f]]
         combs = do.call("expand.grid", levs)
+        
+        # For each comb, find the needed lin. comb. of bhat to estimate
+        # (These will end up being the COLUMNS of K)
         K = apply(combs, 1, function(lev) {
             matches = apply(grid, 1, function(row) {
+                #### DEL if (is.numeric(lev)) all(abs(as.numeric(row[facs]) - lev) < .001)  else 
                 all(row[facs] == lev)
             })
             nmat = sum(matches)
-            if (nmat == 0) stop(paste("Can't predict at", lev))
+            if (nmat == 0) stop(paste("Can't predict at level", lev, "of", "facs.lbl"))
             else fac.reduce(X[matches, , drop=FALSE], lev)
         })
-        # each COLUMN of K has the linear comb we want to predict
-        dimnames(K)[[2]] = apply(combs, 1, paste, collapse=",")
+        dimnames(K)[[2]] = apply(combs, 1, paste, collapse=", ")
+        
+# Toss a NA in any entry where levels are a subset of empty-cell levels...
+        for (emp in empties) {
+            ne = names(emp)
+            if (all(sapply(facs, function(f) f %in% ne))) {
+                testset = emp[, facs, drop=FALSE]   # only the subset of factors
+                flags = apply(combs, 1, function(row) {
+                    any(apply(testset, 1, function(tst) all(row==tst)))
+                })
+                for (j in which(flags)) K[1,j] = NA
+            }
+        }
+        
         # Here is the fcn I'll call to table an estimate of k'beta
         do.est = function(k) {
-            lsm = sum(k * bhat)
-            se = sqrt(sum(k * (V %*% k)))
-            trat = lsm / se
+            if (any(is.na(k))) 
+                lsm = se = trat = NA
+            else {
+                lsm = sum(k * bhat)
+                se = sqrt(sum(k * (V %*% k)))
+                trat = lsm / se
+            }
             c(estimate=lsm, SE=se, t.ratio=trat)
         }
         
         # LS means
-        nm = paste(facs, collapse=":")
         lsms = as.data.frame(t(apply(K,2,do.est)))
         rnames = row.names(lsms)
-        results[[paste(nm, "lsmeans")]] = lsms
+        results[[paste(facs.lbl, "lsmeans")]] = lsms
         
         # Do requested contrasts
         if (! is.null(method)) {
@@ -100,7 +226,7 @@ lsmeans = function(object, specs, contr=list(), at, cov.reduce = function(x, nam
                 bygrid = do.call("expand.grid", bg)
                 bylist = lapply(1:nrow(bygrid), function(row) {
                     bylevs = bygrid[row,]
-                    if (length(byfacs)>1) flags = apply(combs[ ,byfacs], 1, function(r) all(r==bylevs))
+                    if (length(byfacs)>1) flags = apply(combs[ , byfacs], 1, function(r) all(r==bylevs))
                     else flags = combs[,byfacs] == bylevs
                     which(flags)
                 })
@@ -116,6 +242,7 @@ lsmeans = function(object, specs, contr=list(), at, cov.reduce = function(x, nam
                 rows = bylist[[i]]
                 cl = if(is.null(confcn)) contr[[method]] 
                     else confcn(rnames[rows] , ...)
+                if (is.null(cl)) stop(paste("Unknown contrast family:", method))
                 clx = lapply(cl, function(cc) {
                     ccc = zer; ccc[rows]=cc; ccc
                 })
@@ -124,8 +251,9 @@ lsmeans = function(object, specs, contr=list(), at, cov.reduce = function(x, nam
             }
             methdesc = attr(cl, "desc")
             if (is.null(methdesc)) methdesc = method
-            results[[paste(nm,methdesc)]] = as.data.frame(t(sapply(Clist, function(con) {
-                k = K %*% con
+            results[[paste(facs.lbl,methdesc)]] = as.data.frame(t(sapply(Clist, function(con) {
+                nz = which(abs(con) > .0001)
+                k = K[ , nz] %*% con[nz]
                 do.est(k)
             })))
         }
