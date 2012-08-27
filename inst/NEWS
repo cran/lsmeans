@@ -1,0 +1,20 @@
+Changelog for 'lsmeans' package
+
+0.99 - August 27, 2012
+    Now can handle predictors coerced to 'factor' or 'ordered'
+    Now can handle predictors deleted due to rank deficiency
+    Now can handle models with matrices among the predictors
+        (uses 'cov.reduce' on each column; 'at' not supported for matrix covariate)
+    Added support for gls objects (and documented that it works also for glm and glmer)
+    Added a check for empty cells in the design (relative to the model). This (by default)
+        forces a NA to be outputted for any lsmeans that are corrupted by rank deficiencies
+    Generates a warning if specified factor(s) interact with other predictors
+    Better and more comprehensive vignette
+    Added a whole lot of comments to the code (you won't see these, but be glad,
+        as it greatly aids maintainability)
+    Added error messages for anticipatable user errors
+    Numerous bug fixes and corrections to documentation
+    Still no d.f. or P values. Those could take awhile.
+    
+0.90 - August 14, 2012
+    First release, still needs some refinements and bullet-proofing
