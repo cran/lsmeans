@@ -1,5 +1,24 @@
 Changelog for 'lsmeans' package
 
+0.99-80 - September 19, 2012
+    Now finds degrees of freedom when appropriate for all but lme objects
+        (For mer objects, get df only if 'pbkrtest' installed)
+    lsmeans tables now show confidence intervals instead of t tests
+        and contrast output shows p values (both assuming df are available)
+    Added a 'conf' argument for confidence level in lsmean intervals
+    Added a 'glhargs' argument; if provided, lsmeans passes its contrasts 
+        to the 'glht' function in the 'multcomp' package
+    Added an 'adjust' argument for popular single-step multiplicity corrections
+        (uncorrected, Tukey, Bonferroni, and Sidak)
+    Contrast-generating functions now produce an 'adjust' attribute which 
+        provides a default multiplicity-adjustment method
+    The 'check.cells' argument is now deprecated. Instead, we do an actual 
+        check of estimability in rank-deficient cases (currently can happen 
+        only with 'lm' objects). This check is not optional
+    Renamed the vignette to avoid confusion with the regular documentation
+    Returned object is now assigned class "lsm" which has its own print method.
+
+
 0.99 - August 27, 2012
     Now can handle predictors coerced to 'factor' or 'ordered'
     Now can handle predictors deleted due to rank deficiency
