@@ -1,23 +1,56 @@
-lsmeans = function(object, specs, contr=list(), at, cov.reduce = function(x, name) mean(x), 
+lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","bonferroni","none"), conf = .95, 
+                   at, contr=list(), 
+                   cov.reduce = function(x, name) mean(x), 
                    fac.reduce = function(coefs, lev) apply(coefs, 2, mean), 
-                   check.cells = TRUE, ...) 
+                   glhargs=NULL, 
+                   ##### NOW DEPRECATED #####  check.cells = TRUE, 
+                   ...) 
 {
     
     if (missing(specs)) stop("Must specify specs, e.g. 'pairwise ~ treatment'")
+    if(!is.null(glhargs)) # we'll pass contrasts to glht, if multcomp installed; else don't, and warn
+        if(!require("multcomp")) {
+            glhargs = NULL
+            warning("'glhargs' option disabled because 'multcomp' package not installed")
+        }
+    
+    # for later use
+    adjtbl = c("auto","tukey","sidak","bonferroni","none")
+    adj = pmatch(adjust, adjtbl)[1]
+    if (is.na(adj)) {
+        adj = 1
+        warning("Unknown `adjust' method -- automatic method will be used")
+    }
+    autoadj = (adj == 1)
     
 # Get RHS of model formula
-    if (class(object) == "gls")
+    if (inherits(object, "gls"))
         Terms = getCovariateFormula(object)
     else
         Terms = delete.response(terms(object))
     # get the pure formula w/o extra stuff
     formrhs = formula(Terms)
     
+# ddfm will be replaced with a function of k and se if there is a way to get denom df    
+    ddfm = adjV = NULL
+    
 # Figure out thecall (fixed effects part of model), bhat (=coefs), contrasts attr
     if (inherits(object, "mer")) {
+        if(dim(object@V)[1] > 0) ### gradient matrix is nontrivial only for nonlinear models
+            stop("Can't handle an 'nlmer' model")
         thecall = slot(object, "call")
         bhat = fixef(object)
         contrasts = attr(model.matrix(object), "contrasts")
+        if (length(object@muEta) == 0) { # no glm's allowed...
+    ### Would really rather use below instead, but pbkrtest won't cooperate w/ any glm right now
+    ###   fam = object@call$family
+    ###   if (!is.null(fam) && !(fam %in% c("binomial", "poisson")))
+            if (require("pbkrtest")) {
+                adjV = vcovAdj(object, 0)
+                ddfm = function(k, se) .KRdf.mer (adjV, V, k, se*se)
+            }
+            else warning("Install package 'pbkrtest' to obtain bias corrections and degrees of freedom")
+        }
     }
     else if (inherits(object, "lme")) {
         thecall = object$call
@@ -27,22 +60,47 @@ lsmeans = function(object, specs, contr=list(), at, cov.reduce = function(x, nam
     else if (inherits(object, "gls")) {
         thecall = object$call
         bhat = coef(object)
-        contrasts = object$contrasts        
+        contrasts = object$contrasts
+        the.df = object$dims$N - object$dims$p
+        ddfm = function(k, se) the.df
     }
-    else {
+    else if (inherits(object, "lm")) {
         thecall = object$call
         bhat = coef(object)
         contrasts = attr(model.matrix(object), "contrasts")
+        if (!(family(object)$family %in% c("binomial", "poisson")))
+            ddfm = function(k, se) object$df.residual
     }
+    else
+        stop(paste("Can't handle an object of class", class(object)[1]))
+    
     
     # Fixed-effects covariance matrix -- Happily, vcov works the same way for lm, lme, lmer
-    V = vcov(object)
+    if(is.null(adjV)) V = vcov(object)
+    else V = adjV
     
     # We'll work only with the non-NA elements of bhat
     used = which(!is.na(bhat))
+    not.used = which(is.na(bhat))
     bhat = bhat[used]
     # should match vcov...
     if (length(bhat) != nrow(V)) stop("Something's wrong -- Mismatch between vcov() and non-missing coef() results")
+    
+    # get basis for non-estimable fcns. If NULL, everything is estimable
+    null.basis = NULL
+    # currently, below can only happen for lm objects. May need to revisit this
+    # if other model objects can produce rank-deficient fits
+    if (length(not.used) > 0) {
+        # null space of X is same as null space of R in QR decomp
+        tR = t(qr.R(object$qr))
+        rank = object$qr$rank
+        # last few rows are zero -- add a diagonal
+        for (i in (rank+1):nrow(tR)) tR[i,i] = 1
+        null.basis = qr.resid(qr(tR[, 1:rank]), tR[, -(1:rank)])
+        if (!is.matrix(null.basis)) null.basis = matrix(null.basis, ncol=1)
+        # permute the rows via pivot
+        null.basis[object$qr$pivot, ] = null.basis
+    }
     
     # All the variables in the model
     nm = all.vars(formrhs)
@@ -104,17 +162,12 @@ lsmeans = function(object, specs, contr=list(), at, cov.reduce = function(x, nam
         baselevs[[var]] = levels(X[[var]])
     }
     
-
-    # Let's also get the list of empty cells while we have X
-    if (check.cells) empties = empty.cells(formrhs, X)
-    else empties = list()
-    
     # Now make a new dataset with just the factor combs and covariate values we want for prediction
     # WARNING -- This will overwrite X, so get anything you need from X BEFORE we get here
     m = model.frame(Terms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(Terms, m, contrasts.arg = contrasts)
     # use only the columns with non-missing regr coefs
-    X = X[ , used]
+    #--- OMITTED--we'll handle this later X = X[ , used]
     
     # If necessary revise grid with corced numeric factors replaced with factor levels
     if (length(coerced) > 0) grid = do.call("expand.grid", baselevs)
@@ -127,7 +180,7 @@ lsmeans = function(object, specs, contr=list(), at, cov.reduce = function(x, nam
     # Get a vector of terms in the model, for checking
     mod.terms = strsplit(as.character(formrhs[2])[[1]], "\\+")[[1]]
     
-    # routine returns TRUE iff all elements of facs are contained in a model term with another predictor
+##### routine returns TRUE iff all elements of facs are contained in a model term with another predictor
     some.term.contains = function(facs) {
         for (trm in mod.terms) {
             flag = all(sapply(facs, function(f) length(grep(f,trm))>0))
@@ -184,42 +237,65 @@ lsmeans = function(object, specs, contr=list(), at, cov.reduce = function(x, nam
             else fac.reduce(X[matches, , drop=FALSE], lev)
         })
         dimnames(K)[[2]] = apply(combs, 1, paste, collapse=", ")
-        
-# Toss a NA in any entry where levels are a subset of empty-cell levels...
-        for (emp in empties) {
-            ne = names(emp)
-            if (all(sapply(facs, function(f) f %in% ne))) {
-                testset = emp[, facs, drop=FALSE]   # only the subset of factors
-                flags = apply(combs, 1, function(row) {
-                    any(apply(testset, 1, function(tst) all(row==tst)))
-                })
-                for (j in which(flags)) K[1,j] = NA
-            }
-        }
-        
-        # Here is the fcn I'll call to table an estimate of k'beta
+
+    #### Here is the fcn I'll call to table an estimate of k'beta
         do.est = function(k) {
-            if (any(is.na(k))) 
-                lsm = se = trat = NA
-            else {
-                lsm = sum(k * bhat)
-                se = sqrt(sum(k * (V %*% k)))
-                trat = lsm / se
+            est = se = df = NA
+            estimable = TRUE
+            if (!is.null(null.basis)) {
+                estimable = all(abs(apply(null.basis, 2, function(x) sum(k*x))) < 1e-4)      
             }
-            c(estimate=lsm, SE=se, t.ratio=trat)
+            if (estimable) {
+                k = k[used]
+                est = sum(k * bhat)
+                se = sqrt(sum(k * (V %*% k)))
+                if (!is.null(ddfm)) df = ddfm(k, se)
+            }
+            c(estimate=est, SE=se, df=df)
+        }
+    
+    ##### Compute adjusted p value
+        adj.p.value = function(t, df, meth, fam.size, n.contr) {
+            abst = abs(t)
+            switch(meth,
+                   NA, # auto - shouldn't happen
+                   ptukey(sqrt(2)*abst, fam.size, df, lower.tail=FALSE), # tukey
+                   1 - (1 - 2*pt(abst, df, lower.tail=FALSE))^n.contr, # sidak
+                   apply(cbind(abst,df), 1, 
+                         function(z) min(1, 2 * n.contr * pt(z[1], z[2], lower.tail=FALSE))), # bonf
+                   2 * pt(abst, df, lower.tail=FALSE) #none
+                   )
         }
         
         # LS means
         lsms = as.data.frame(t(apply(K,2,do.est)))
         rnames = row.names(lsms)
+        # fix-up names and get CIs
+        names(lsms)[1] = "lsmean"
+        if (conf > 1) conf = conf/100 # pct --> frac
+        if ((conf < 1) && (conf > .01)) {
+            if (is.null(ddfm)) {
+                me = qnorm((1-conf)/2, lower.tail=FALSE) * lsms$SE
+                lsms$asymp.LCL = lsms$lsmean - me
+                lsms$asymp.UCL = lsms$lsmean + me
+            }
+            else {
+                me = qt((1-conf)/2, lsms$df, lower.tail=FALSE) * lsms$SE
+                lsms$lower.CL = lsms$lsmean - me
+                lsms$upper.CL = lsms$lsmean + me
+            }
+        }
         results[[paste(facs.lbl, "lsmeans")]] = lsms
         
         # Do requested contrasts
         if (! is.null(method)) {
+            # look for contrast fcn
             fn = paste(method, "lsmc", sep=".")
             confcn = if (exists(fn, mode="function")) get(fn) 
                 else NULL
-            if (is.null(byfacs)) bylist = list(1:nrow(combs))
+            
+            # bylist will be a list of subsets of the combs to be contrasted
+            if (is.null(byfacs)) bylist = list(1:nrow(combs)) # all in one set
             else {
                 bg = list()
                 for (f in byfacs) bg[[f]] = baselevs[[f]]
@@ -235,8 +311,12 @@ lsmeans = function(object, specs, contr=list(), at, cov.reduce = function(x, nam
                 rnames = combs[ ,-bycols]
                 if (!is.null(ncol(rnames))) rnames = apply(rnames, 1, paste, collapse=",")
             }
+            
+            # list to hold results
             Clist = list()
             zer = rep(0, nrow(lsms))
+            
+            # OK, let's go thru the bylist
             nby = length(bylist)
             for (i in 1:nby) {
                 rows = bylist[[i]]
@@ -247,24 +327,94 @@ lsmeans = function(object, specs, contr=list(), at, cov.reduce = function(x, nam
                     ccc = zer; ccc[rows]=cc; ccc
                 })
                 if (nby > 1) names(clx) = paste(names(clx), "|", bylabs[i])
+                
+                # Currently, we're combining all these sets of contrasts in one table
+                # Maybe we want to reconsider? If so, ship most of code below inside the
+                # loop, and modify labels
                 Clist = c(Clist, clx)
             }
+            
+            # Make a good label for the contrast table
             methdesc = attr(cl, "desc")
-            if (is.null(methdesc)) methdesc = method
-            results[[paste(facs.lbl,methdesc)]] = as.data.frame(t(sapply(Clist, function(con) {
-                nz = which(abs(con) > .0001)
-                k = K[ , nz] %*% con[nz]
-                do.est(k)
-            })))
+            
+            # Try to at least explain why glht screws up
+            if (!is.null(null.basis) && !is.null(glhargs)) {
+                #glhargs = NULL
+                warning("Error may occur in 'glht' due to rank deficiency")
+            }
+            if (!is.null(glhargs)) { # for shipping it to glht
+                KK = t(sapply(Clist, function(con) {
+                    nz = which(abs(con) > .0001)
+                    K[ , nz] %*% con[nz]    
+                }))
+                # If glht gets fixed for rank deficiency, may want to consider checking rows of KK
+                # for estimability (see code in do.est())
+                args = c(list(model=object, linfct=KK[ , used]), glhargs)
+                ctbl = do.call("glht", args)
+            }
+            else { # internal way of doing contrasts
+                if (is.null(methdesc)) methdesc = method
+
+                # Figure out the multiplicity adjustment
+                if (autoadj) adj = pmatch(attr(cl, "adjust", 5), adjtbl)[1] 
+                if (is.na(adj)) adj = 5     # defaults to 5 ("none")
+                
+                ctbl = as.data.frame(t(sapply(Clist, function(con) {
+                    nz = which(abs(con) > .0001)
+                    k = K[ , nz] %*% con[nz]
+                    do.est(k)
+                })))
+                
+                # factors for mult adjustments...
+                n.fam = nrow(lsms) / nby  ########### WAS sum(!is.na(lsms$lsmean)) / nby               
+                n.contr = sum(!is.na(ctbl$estimate))
+                if (!is.null(ddfm)) {
+                    ctbl$t.ratio = round(ctbl$estimate / ctbl$SE, 5)
+                    ctbl$p.value = round(adj.p.value(ctbl$t.ratio, ctbl$df, adj, n.fam, n.contr), 5)
+                }
+                else {
+                    ctbl$z.ratio = round(ctbl$estimate / ctbl$SE, 5)
+                    ctbl$p.value = round(adj.p.value(ctbl$z.ratio, 10000, adj, n.fam, n.contr), 5)
+                }
+                attr(ctbl, "mesg") = if(adj == 2)
+                    paste("p values are adjusted using the", adjtbl[adj], "method for", n.fam, "means")
+                else if (adj < 5)
+                    paste("p values are adjusted using the", adjtbl[adj], "method for", n.contr, "tests")
+                else "p values are not adjusted"
+            }
+            results[[paste(facs.lbl,methdesc)]] = ctbl
         }
     }
+    class(results) = c("lsm","list")
     results
 }
 
 
+### S3 print method for "lsm" class
+### We just print if data.frame, but summarize if glht class, because its print method
+### doesn't display the contrast estimates
+print.lsm = function(x, omit=NULL, ...) {
+    for (i in 1:length(x)) {
+        if (length(grep(i,omit)) > 0) next
+        cat(paste("$`", names(x)[i], "`\n", sep="")) # mimic print method for lists
+        elt = x[[i]]
+        if(inherits(elt, "glht")) print(summary(elt))
+        else {
+            print(elt)
+            msg = attr(elt, "mesg")
+            if (!is.null(msg)) 
+                for (j in 1:length(msg)) cat(paste("   ", msg[j], "\n"))
+            cat("\n")
+        }
+    }
+}
+
 ### functions to implement different families of contrasts
 ### All return a matrix or data frame whose columns are the desired contrasts coefs
 ### with appropriate row and column names
+### Also they have two attributes: 
+###   "desc" is an expanded description of the family,
+###   "adjust" is the default multiplicity adjustment (used if adjust="auto" in lsmeans)
 
 # all pairwise trt[i] - trt[j], i < j
 pairwise.lsmc = function(levs,...) {
@@ -282,6 +432,7 @@ pairwise.lsmc = function(levs,...) {
     row.names(M) = levs
     M = M[-1]
     attr(M, "desc") = "pairwise differences"
+    attr(M, "adjust") = "tukey"
     M
 }
 
@@ -301,6 +452,7 @@ revpairwise.lsmc = function(levs,...) {
     row.names(M) = levs
     M = M[-1]
     attr(M, "desc") = "pairwise differences"
+    attr(M, "adjust") = "tukey"
     M
 }
 
@@ -324,10 +476,11 @@ poly.lsmc = function(levs, max.degree=min(6,k-1)) {
     row.names(M) = levs
     names(M) = nm[1:ncol(M)]
     attr(M, "desc") = "polynomial contrasts"
+    attr(M, "adjust") = "none"
     M
 }
 
-# All comparisons with a control
+# All comparisons with a control; ref = index of control group
 trt.vs.ctrl.lsmc = function(levs, ref=1) {
     k = length(levs)
     M = data.frame(levs=levs)
@@ -342,6 +495,7 @@ trt.vs.ctrl.lsmc = function(levs, ref=1) {
     row.names(M) = levs
     M = M[-1]
     attr(M, "desc") = "differences from control"
+    attr(M, "adjust") = "sidak"
     M
 }
 
