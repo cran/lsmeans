@@ -18,7 +18,9 @@
 # lcoefs is contrast of interest
 # varlb is my already-computed value of lcoef' Phi lcoef = est variance of lcoef'betahat
 .KRdf.mer = function(PhiA, Phi, lcoefs, varlb) {
-      Theta = Matrix(as.numeric(outer(lcoefs,lcoefs) / varlb), nrow=length(lcoefs))
+  # I guess I'm supposed to use unadjusted varlb, as much as I'm inclined not to
+      vlb = sum(lcoefs * (Phi %*% lcoefs))
+      Theta = Matrix(as.numeric(outer(lcoefs,lcoefs) / vlb), nrow=length(lcoefs))
       P = attr(PhiA,"P")
       W = attr(PhiA,"W")
 

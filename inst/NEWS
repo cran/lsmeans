@@ -1,5 +1,19 @@
 Changelog for 'lsmeans' package
 
+1.00-00 - October 19, 2012
+    Added support for factors in 'at' argument (can use it to restrict results)
+    Added columns with factor levels to lsmeans table - for possible use in plots
+    Extended trt.vs.ctrl.lsmc to accommodate more than one reference level
+        (Thanks to Florent Duyme, ARVALIS - Institut du végétal, for suggesting this)
+    Refinements to print methods, including new class 'data.frame.lsm' to display 
+        results the way I want them
+    If 'glhargs' is used, those elements are now of class 'summary.glht'. 
+        We can still use those results in the same ways as before
+    Added support for adjustment methods in 'p.adjust' (stats)
+    Included a couple of sample datasets
+    Various small bug fixes (e.g. subsets bug)
+
+
 0.99-80 - September 19, 2012
     Now finds degrees of freedom when appropriate for all but lme objects
         (For mer objects, get df only if 'pbkrtest' installed)
