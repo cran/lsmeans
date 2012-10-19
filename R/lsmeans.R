@@ -1,4 +1,4 @@
-lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","bonferroni","none"), conf = .95, 
+lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.methods), conf = .95, 
                    at, contr=list(), 
                    cov.reduce = function(x, name) mean(x), 
                    fac.reduce = function(coefs, lev) apply(coefs, 2, mean), 
@@ -15,11 +15,12 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","bonferroni","
         }
     
     # for later use
-    adjtbl = c("auto","tukey","sidak","bonferroni","none")
+    adjtbl = c("auto","tukey","sidak",p.adjust.methods)
+    no.adj = pmatch("none", adjtbl)
     adj = pmatch(adjust, adjtbl)[1]
     if (is.na(adj)) {
         adj = 1
-        warning("Unknown `adjust' method -- automatic method will be used")
+        warning("Unknown or non-unique `adjust' method -- automatic method will be used")
     }
     autoadj = (adj == 1)
     
@@ -64,12 +65,13 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","bonferroni","
         the.df = object$dims$N - object$dims$p
         ddfm = function(k, se) the.df
     }
-    else if (inherits(object, "lm")) {
+    else if (inherits(object, "lm")) {  ## Also OK for aov, glm, rlm (MASS). Not lqs (but close?)
         thecall = object$call
         bhat = coef(object)
         contrasts = attr(model.matrix(object), "contrasts")
         if (!(family(object)$family %in% c("binomial", "poisson")))
-            ddfm = function(k, se) object$df.residual
+            if (!is.na(object$df.residual)) 
+                ddfm = function(k, se) object$df.residual
     }
     else
         stop(paste("Can't handle an object of class", class(object)[1]))
@@ -104,16 +106,16 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","bonferroni","
     
     # All the variables in the model
     nm = all.vars(formrhs)
-    
+
 # Figure out if any are coerced to factor or ordered
     anm = all.names(formrhs)    
     coerced = anm[1 + grep("factor|ordered", anm)]
-    
+   
 # Obtain a simplified formula -- needed to recover the data in the model    
     form = as.formula(paste("~", paste(nm, collapse = "+")))
     envir = attr(Terms, ".Environment")
     X = model.frame(form, eval(thecall$data, envir=envir), 
-                    subset = eval(thecall$subset, envir=envir))
+                    subset = eval(thecall$subset, enclos=envir))
     # Now X contains the data used to fit the model, w/o any expansions (e.g. poly() calls)
 
 # Start accumulating info for the vars. 
@@ -124,11 +126,15 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","bonferroni","
     if (is.character(specs)) specs = as.list(specs)
     # allow a single formula
     if (!is.list(specs)) specs = list(specs)
-    
+ 
     for (xname in names(X)) {
         obj = X[[xname]]
         if (is.factor(obj)) {            
-            baselevs[[xname]] = xlev[[xname]] = levels(obj)
+            xlev[[xname]] = levels(obj)
+            if (!missing(at) && !is.null(at[[xname]]))
+                baselevs[[xname]] = at[[xname]]
+            else
+                baselevs[[xname]] = levels(obj)
         }
         else if (is.matrix(obj)) {
             # Matrices -- reduce columns thereof, but don't add to baselevs
@@ -161,7 +167,7 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","bonferroni","
         X[[var]] = factor(X[[var]])
         baselevs[[var]] = levels(X[[var]])
     }
-    
+
     # Now make a new dataset with just the factor combs and covariate values we want for prediction
     # WARNING -- This will overwrite X, so get anything you need from X BEFORE we get here
     m = model.frame(Terms, grid, na.action = na.pass, xlev = xlev)
@@ -257,14 +263,14 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","bonferroni","
     ##### Compute adjusted p value
         adj.p.value = function(t, df, meth, fam.size, n.contr) {
             abst = abs(t)
-            switch(meth,
-                   NA, # auto - shouldn't happen
-                   ptukey(sqrt(2)*abst, fam.size, df, lower.tail=FALSE), # tukey
-                   1 - (1 - 2*pt(abst, df, lower.tail=FALSE))^n.contr, # sidak
-                   apply(cbind(abst,df), 1, 
-                         function(z) min(1, 2 * n.contr * pt(z[1], z[2], lower.tail=FALSE))), # bonf
-                   2 * pt(abst, df, lower.tail=FALSE) #none
-                   )
+            if (meth <= 3)
+                switch(meth,
+                       NA,                                                   # should not happen
+                       ptukey(sqrt(2)*abst, fam.size, df, lower.tail=FALSE), # tukey
+                       1 - (1 - 2*pt(abst, df, lower.tail=FALSE))^n.contr,   # sidak
+                )
+            else
+                p.adjust(2*pt(abst, df, lower.tail=FALSE), adjtbl[meth], n=n.contr)
         }
         
         # LS means
@@ -272,6 +278,8 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","bonferroni","
         rnames = row.names(lsms)
         # fix-up names and get CIs
         names(lsms)[1] = "lsmean"
+        # include factor levels
+        lsms = cbind(combs, lsms)
         if (conf > 1) conf = conf/100 # pct --> frac
         if ((conf < 1) && (conf > .01)) {
             if (is.null(ddfm)) {
@@ -285,6 +293,8 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","bonferroni","
                 lsms$upper.CL = lsms$lsmean + me
             }
         }
+        attr(lsms, "print.row.names") = FALSE
+        class(lsms) = c("data.frame.lsm", "data.frame")
         results[[paste(facs.lbl, "lsmeans")]] = lsms
         
         # Do requested contrasts
@@ -350,14 +360,15 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","bonferroni","
                 # If glht gets fixed for rank deficiency, may want to consider checking rows of KK
                 # for estimability (see code in do.est())
                 args = c(list(model=object, linfct=KK[ , used]), glhargs)
-                ctbl = do.call("glht", args)
+                ctbl = summary(do.call("glht", args))
             }
             else { # internal way of doing contrasts
                 if (is.null(methdesc)) methdesc = method
 
                 # Figure out the multiplicity adjustment
-                if (autoadj) adj = pmatch(attr(cl, "adjust", 5), adjtbl)[1] 
-                if (is.na(adj)) adj = 5     # defaults to 5 ("none")
+                adjattr = attr(cl, "adjust")
+                if (autoadj) adj = ifelse(is.null(adjattr), no.adj, pmatch(adjattr, adjtbl))
+                if (is.na(adj)) adj = no.adj
                 
                 ctbl = as.data.frame(t(sapply(Clist, function(con) {
                     nz = which(abs(con) > .0001)
@@ -378,9 +389,11 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","bonferroni","
                 }
                 attr(ctbl, "mesg") = if(adj == 2)
                     paste("p values are adjusted using the", adjtbl[adj], "method for", n.fam, "means")
-                else if (adj < 5)
+                else if (adj < length(adjtbl))
                     paste("p values are adjusted using the", adjtbl[adj], "method for", n.contr, "tests")
                 else "p values are not adjusted"
+                attr(ctbl, "print.row.names") = TRUE
+                class(ctbl) = c("data.frame.lsm", "data.frame")
             }
             results[[paste(facs.lbl,methdesc)]] = ctbl
         }
@@ -407,6 +420,25 @@ print.lsm = function(x, omit=NULL, ...) {
             cat("\n")
         }
     }
+}
+
+# new version
+print.lsm = function(x, omit=NULL, ...) {
+    for (i in 1:length(x)) {
+        if (i %in% omit) next
+        cat(paste("$`", names(x)[i], "`\n", sep="")) # mimic print method for lists
+        print(x[[i]])
+        cat("\n")
+    }
+    invisible(x)
+}
+
+print.data.frame.lsm = function(x, ...) {
+    print.data.frame(x, row.names=attr(x, "print.row.names"))
+    msg = attr(x, "mesg")
+    if (!is.null(msg)) 
+        for (j in 1:length(msg)) cat(paste("   ", msg[j], "\n"))
+    invisible(x)
 }
 
 ### functions to implement different families of contrasts
@@ -481,15 +513,22 @@ poly.lsmc = function(levs, max.degree=min(6,k-1)) {
 }
 
 # All comparisons with a control; ref = index of control group
+# New version -- allows more than one control group (ref is a vector)
 trt.vs.ctrl.lsmc = function(levs, ref=1) {
+    if ((min(ref) < 1) || (max(ref) > length(levs)))
+        stop("Reference levels are out of range")
     k = length(levs)
+    cnm = ifelse(length(ref)==1, 
+        levs[ref], 
+        paste("avg(", paste(levs[ref], collapse=","), ")", sep=""))
+    templ = rep(0, length(levs))
+    templ[ref] = -1 / length(ref)
     M = data.frame(levs=levs)
     for (i in 1:k) {
-        if (i == ref) next
-        con = rep(0,k)
+        if (i %in% ref) next
+        con = templ
         con[i] = 1
-        con[ref] = -1
-        nm = paste(levs[i], levs[ref], sep = " - ")
+        nm = paste(levs[i], cnm, sep = " - ")
         M[[nm]] = con
     }
     row.names(M) = levs

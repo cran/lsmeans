@@ -10,7 +10,7 @@
 Contrast families
 }
 \description{
-These functions return standard sets of contrasts coefficients.
+These functions return standard sets of contrast coefficients.
 The name of any of these functions (with the \code{.lsmc} omitted) may be used in the
 left-hand side of a \code{spec} formula in \code{\link{lsmeans}}.
 }
@@ -37,18 +37,19 @@ trt.vs.ctrlk.lsmc(levs, ...)
 
 \code{poly.lsmc} generates orthogonal polynomial contrasts, assuming equally-spaced factor levels. These are derived from the \code{\link{poly}} function, but an ad hoc algorithm is used to scale them to integer coefficients that are (usually) the same as in published tables of orthogonal polynomial contrasts.
 
-\code{trt.vs.ctrl.lsmc} and its relatives generate contrasts for comparing one level with each of the other levels. The argument \code{ref} should be the \emph{index} (not the label) of the reference level. \code{trt.vs.ctrl1.lsmc} is the same as \code{trt.vs.ctrl , ref=1)}, and \code{trt.vs.ctrlk.lsmc} is the samme as \code{trt.vs.ctrl , ref=length(levs))}
+\code{trt.vs.ctrl.lsmc} and its relatives generate contrasts for comparing one level (or the average over specified levels) with each of the other levels. The argument \code{ref} should be the \emph{index}(es) (not the labels) of the reference level(s). \code{trt.vs.ctrl1.lsmc} is the same as \code{trt.vs.ctrl , ref=1)}, and \code{trt.vs.ctrlk.lsmc} is the same as \code{trt.vs.ctrl , ref=length(levs))}
 }
 \value{
-A data.frame or list, each column (or list entry) containing contrast coefficients for \code{levs}.
-The \code{names} attribute is used to label the results in \code{lsmeans}
+A \code{data.frame}, each column containing contrast coefficients for \code{levs}.
+The \code{"desc"} attribute is used to label the results in \code{lsmeans},
+and the \code{"adjust"} attribute gives the default adjustment method for multiplicity.
 }
 
 \author{
 Russell V. Lenth, The University of Iowa
 }
 \note{
-You may create your own contrast functions, using these as guides. A function named \code{mycont.lsmc} may be invoked in \code{lsmeans} via \code{lsmeans(\var{object}, mycontr ~ \var{factor})}. See the examples.
+You may create your own contrast functions, using these as guides. A function named \code{mycont.lsmc} may be invoked in \code{lsmeans} via \code{lsmeans(\var{object}, mycontr ~ \var{factor})}. The \code{"desc"} and \code{"adjust"} attributes are optional; if absent, the root name of the function is used as \code{"desc"}, and no adjustment is requested for p values. See the examples.
 }
 
 
@@ -61,10 +62,10 @@ poly.lsmc(1:4)
 
 \dontrun{
 ### Setting up a custom contrast function
-helmert.lsmc = function(levs, ...) {
-  M = as.data.frame(contr.helmert(levs))
-  names(M) = paste(levs[-1],"vs earlier")
-  attr(M, "desc") = "Helmert contrasts"
+helmert.lsmc <- function(levs, ...) {
+  M <- as.data.frame(contr.helmert(levs))
+  names(M) <- paste(levs[-1],"vs earlier")
+  attr(M, "desc") <- "Helmert contrasts"
   M
 }
 lsmeans(Oats.lme, helmert ~ Variety)

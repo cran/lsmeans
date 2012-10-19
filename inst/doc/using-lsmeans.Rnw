@@ -18,7 +18,7 @@
 \def\bottomfraction{.5}
 \def\botfigrule{\hrule}
 \def\topfigrule{\hrule}
-
+\def\code{\texttt}
 
 
 
@@ -58,12 +58,11 @@ R> library(lsmeans)
 R> lsmeans(typing.lm, ~ type)
 \end{Winput}
 \begin{Woutput}
-Loading required package: Matrix
 $`type lsmeans`
-    lsmean       SE df lower.CL upper.CL
-A 73.56518 3.640583  8 65.16998 81.96038
-B 54.49529 3.722251  8 45.91176 63.07881
-C 49.43953 3.943413  8 40.34600 58.53306
+ type   lsmean       SE df lower.CL upper.CL
+    A 73.56518 3.640583  8 65.16998 81.96038
+    B 54.49529 3.722251  8 45.91176 63.07881
+    C 49.43953 3.943413  8 40.34600 58.53306
 \end{Woutput}
 These results are the same as what are often called ``adjusted means'' in the analysis of covariance---predicted values for each keyboard type, when the covariate is set to its overall average value, as we now verify:
 \begin{Winput}
@@ -80,10 +79,10 @@ R> lsmeans(typing.lm, pairwise ~ type, at = list(hours = 55))
 \end{Winput}
 \begin{Woutput}
 $`type lsmeans`
-    lsmean       SE df lower.CL upper.CL
-A 66.28560 4.154824  8 56.70456 75.86664
-B 47.21570 4.351192  8 37.18184 57.24957
-C 42.15995 3.588596  8 33.88463 50.43527
+ type   lsmean       SE df lower.CL upper.CL
+    A 66.28560 4.154824  8 56.70456 75.86664
+    B 47.21570 4.351192  8 37.18184 57.24957
+    C 42.15995 3.588596  8 33.88463 50.43527
 
 $`type pairwise differences`
        estimate       SE df t.ratio p.value
@@ -106,15 +105,15 @@ R> print(typing.lsm, omit=1)
 \begin{Woutput}
 $`type pairwise differences`
 
-   Simultaneous Tests for General Linear Hypotheses
+	 Simultaneous Tests for General Linear Hypotheses
 
 Fit: lm(formula = pain ~ hours + type, data = typing)
 
 Linear Hypotheses:
            Estimate Std. Error t value Pr(>|t|)
-A - B == 0   19.070      5.082   3.753   0.0138 *
-A - C == 0   24.126      5.560   4.339   0.0061 **
-B - C == 0    5.056      5.720   0.884   0.6641
+A - B == 0   19.070      5.082   3.753  0.01374 *
+A - C == 0   24.126      5.560   4.339  0.00595 **
+B - C == 0    5.056      5.720   0.884  0.66412
 ---
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 (Adjusted p values reported -- single-step method)
@@ -123,7 +122,7 @@ The $p$~values are slightly different, as expected. We may of course use other m
 \begin{Winput}
 R> plot(typing.lsm[[2]])
 \end{Winput}
-\includegraphics[scale=.6]{using-lsmeans-8-R-fig.pdf}
+\includegraphics[scale=.6]{using-lsmeans-typing-glht-plot-fig.pdf}
 
 
 \section{Two-factor example}
@@ -171,13 +170,13 @@ R> print(lsmeans(warp.lm, list(pairwise ~ wool | tension,  poly ~ tension | wool
 \end{Winput}
 \begin{Woutput}
 $`wool:tension lsmeans`
-       lsmean       SE df lower.CL upper.CL
-A, L 44.55556 3.646761 48 37.22325 51.88786
-B, L 28.22222 3.646761 48 20.88992 35.55453
-A, M 24.00000 3.646761 48 16.66769 31.33231
-B, M 28.77778 3.646761 48 21.44547 36.11008
-A, H 24.55556 3.646761 48 17.22325 31.88786
-B, H 18.77778 3.646761 48 11.44547 26.11008
+ wool tension   lsmean       SE df lower.CL upper.CL
+    A       L 44.55556 3.646761 48 37.22325 51.88786
+    B       L 28.22222 3.646761 48 20.88992 35.55453
+    A       M 24.00000 3.646761 48 16.66769 31.33231
+    B       M 28.77778 3.646761 48 21.44547 36.11008
+    A       H 24.55556 3.646761 48 17.22325 31.88786
+    B       H 18.77778 3.646761 48 11.44547 26.11008
 
 $`wool:tension pairwise differences`
            estimate       SE df  t.ratio p.value
@@ -204,9 +203,9 @@ R> lsmeans(warp.lm, ~ wool)   ### NOT a good idea!
 \end{Winput}
 \begin{Woutput}
 $`wool lsmeans`
-    lsmean       SE df lower.CL upper.CL
-A 31.03704 2.105459 48 26.80373 35.27035
-B 25.25926 2.105459 48 21.02595 29.49257
+ wool   lsmean       SE df lower.CL upper.CL
+    A 31.03704 2.105459 48 26.80373 35.27035
+    B 25.25926 2.105459 48 21.02595 29.49257
 
 Warning message:
 In lsmeans(warp.lm, ~wool) :
@@ -230,11 +229,13 @@ R> summary(Oats)
  I  :12                    Max.   :0.60   Max.   :174.0
 \end{Woutput}
 
-The experiment was conducted in six blocks, and each block was divided into three plots, which were randomly assigned to varieties of oats. With just "Variety" as a factor, it is a randomized complete-block experiment. However, each plot was subdivided into 4 subplots and the subplots were treated with different amounts of nitrogen. Thus, "Block" is a blocking factor, "Variety" is the whole-plot factor, and "nitro" is the split-plot factor. The response variable is "yield", the yield of each subplot in bushels per~acre. Here is an interaction plot of the data
+The experiment was conducted in six blocks, and each block was divided into three plots, which were randomly assigned to varieties of oats. With just "Variety" as a factor, it is a randomized complete-block experiment. However, each plot was subdivided into 4 subplots and the subplots were treated with different amounts of nitrogen. Thus, "Block" is a blocking factor, "Variety" is the whole-plot factor, and "nitro" is the split-plot factor. The response variable is "yield", the yield of each subplot in bushels per~acre. Below is an interaction plot of the data, and also an interaction pl;ot of the least-squares means, which will be described later.
 \begin{Winput}
 R> with(Oats, interaction.plot(nitro, Variety, yield, type="b"))
 \end{Winput}
 \includegraphics[scale=.5]{using-lsmeans-oats-intplot-fig.pdf}
+\hfill
+\includegraphics[scale=.5]{using-lsmeans-oats-intplot2-fig.pdf}
 \\
 There is not much evidence of an interaction. In this dataset, we have random factors "Block" and "Block:Variety" (which identifies the plots). So we will fit a linear mixed-effects model that accounts for these. Another technicality is that "nitro" is a numeric variable, and initially we will model it as a factor. We will use "lmer" in the "lme4" package to fit a model.
 \begin{Winput}
@@ -243,14 +244,11 @@ R> Oats.lmer = lmer(yield ~ Variety + factor(nitro) + (1 | Block/Variety), data=
 R> lsmeans(Oats.lmer, list(revpairwise ~ Variety,  poly ~ nitro,  ~ Variety:nitro))
 \end{Winput}
 \begin{Woutput}
-Loading required package: pbkrtest
-Loading required package: MASS
-Loading required package: parallel
 $`Variety lsmeans`
-              lsmean       SE       df lower.CL upper.CL
-Golden Rain 104.5000 7.797418 8.869823 86.82147 122.1785
-Marvellous  109.7917 7.797418 8.869823 92.11314 127.4702
-Victory      97.6250 7.797418 8.869823 79.94647 115.3035
+     Variety   lsmean       SE       df lower.CL upper.CL
+ Golden Rain 104.5000 7.797418 8.869823 86.82147 122.1785
+  Marvellous 109.7917 7.797418 8.869823 92.11314 127.4702
+     Victory  97.6250 7.797418 8.869823 79.94647 115.3035
 
 $`Variety pairwise differences`
                            estimate       SE df  t.ratio p.value
@@ -260,11 +258,11 @@ Victory - Marvellous     -12.166667 7.078899 10 -1.71872 0.24583
     p values are adjusted using the tukey method for 3 means
 
 $`nitro lsmeans`
-       lsmean       SE       df  lower.CL  upper.CL
-0    79.38889 7.132279 6.639194  62.33614  96.44164
-0.2  98.88889 7.132279 6.639194  81.83614 115.94164
-0.4 114.22222 7.132279 6.639194  97.16947 131.27497
-0.6 123.38889 7.132279 6.639194 106.33614 140.44164
+ nitro    lsmean       SE       df  lower.CL  upper.CL
+     0  79.38889 7.132279 6.639194  62.33614  96.44164
+   0.2  98.88889 7.132279 6.639194  81.83614 115.94164
+   0.4 114.22222 7.132279 6.639194  97.16947 131.27497
+   0.6 123.38889 7.132279 6.639194 106.33614 140.44164
 
 $`nitro polynomial contrasts`
            estimate        SE df  t.ratio p.value
@@ -274,22 +272,29 @@ cubic      -2.00000 13.439530 51 -0.14881 0.88229
     p values are not adjusted
 
 $`Variety:nitro lsmeans`
-                    lsmean       SE       df  lower.CL  upper.CL
-Golden Rain, 0    79.91667 8.220281 10.93256  61.81032  98.02301
-Marvellous, 0     85.20833 8.220281 10.93256  67.10199 103.31468
-Victory, 0        73.04167 8.220281 10.93256  54.93532  91.14801
-Golden Rain, 0.2  99.41667 8.220281 10.93256  81.31032 117.52301
-Marvellous, 0.2  104.70833 8.220281 10.93256  86.60199 122.81468
-Victory, 0.2      92.54167 8.220281 10.93256  74.43532 110.64801
-Golden Rain, 0.4 114.75000 8.220281 10.93256  96.64366 132.85634
-Marvellous, 0.4  120.04167 8.220281 10.93256 101.93532 138.14801
-Victory, 0.4     107.87500 8.220281 10.93256  89.76866 125.98134
-Golden Rain, 0.6 123.91667 8.220281 10.93256 105.81032 142.02301
-Marvellous, 0.6  129.20833 8.220281 10.93256 111.10199 147.31468
-Victory, 0.6     117.04167 8.220281 10.93256  98.93532 135.14801
+     Variety nitro    lsmean       SE       df  lower.CL  upper.CL
+ Golden Rain     0  79.91667 8.220281 10.93256  61.81032  98.02301
+  Marvellous     0  85.20833 8.220281 10.93256  67.10199 103.31468
+     Victory     0  73.04167 8.220281 10.93256  54.93532  91.14801
+ Golden Rain   0.2  99.41667 8.220281 10.93256  81.31032 117.52301
+  Marvellous   0.2 104.70833 8.220281 10.93256  86.60199 122.81468
+     Victory   0.2  92.54167 8.220281 10.93256  74.43532 110.64801
+ Golden Rain   0.4 114.75000 8.220281 10.93256  96.64366 132.85634
+  Marvellous   0.4 120.04167 8.220281 10.93256 101.93532 138.14801
+     Victory   0.4 107.87500 8.220281 10.93256  89.76866 125.98134
+ Golden Rain   0.6 123.91667 8.220281 10.93256 105.81032 142.02301
+  Marvellous   0.6 129.20833 8.220281 10.93256 111.10199 147.31468
+     Victory   0.6 117.04167 8.220281 10.93256  98.93532 135.14801
 \end{Woutput}
 Unlike the warpbreaks example, the additive model makes it reasonable to look at the marginal lsmeans, which are equally-weighted marginal averages of the cell predictions in the fifth table of the output.\footnote{%
 Interestingly, SAS's implementation of least-squares means will refuse to output these cell predictions unless the interaction term is in the model.}
+The right-hand interaction plot above was obtained using the statement
+\begin{Winput}
+R> with(Oats.lsms[[5]], interaction.plot(nitro, Variety, lsmean, type="b", 
+R>                                       ylab="Least-Squares means"))
+\end{Winput}
+
+
 
 While the default for obtaining marginal lsmeans is to weight the predictions equally, we may override this via the "fac.reduce" argument. For example, suppose that we want the "Variety" predictions when "nitro" is 0.25. We can obtain these by interpolation as follows:
 \begin{Winput}
@@ -297,10 +302,10 @@ R> lsmeans(Oats.lmer, ~ Variety, fac.reduce = function(X, lev) .75 * X[2, ] + .2
 \end{Winput}
 \begin{Woutput}
 $`Variety lsmeans`
-              lsmean      SE       df lower.CL upper.CL
-Golden Rain 103.2500 8.01164 9.880139 85.36956 121.1304
-Marvellous  108.5417 8.01164 9.880139 90.66122 126.4221
-Victory      96.3750 8.01164 9.880139 78.49456 114.2554
+     Variety   lsmean      SE       df lower.CL upper.CL
+ Golden Rain 103.2500 8.01164 9.880139 85.36956 121.1304
+  Marvellous 108.5417 8.01164 9.880139 90.66122 126.4221
+     Victory  96.3750 8.01164 9.880139 78.49456 114.2554
 \end{Woutput}
 (There is also a "cov.reduce" argument to change the default handling of covariates.)
 The polynomial contrasts for "nitro" suggest that we could substitute a quadratic trend for "nitro"; and if we do that, then there is another (probably better) way to make the above predictions:
@@ -310,15 +315,17 @@ R> lsmeans(OatsPoly.lmer, ~ Variety, at = list(nitro = .25))
 \end{Winput}
 \begin{Woutput}
 $`Variety lsmeans`
-               lsmean       SE       df lower.CL upper.CL
-Golden Rain 103.88437 8.002143 9.834068 86.01363 121.7551
-Marvellous  109.17604 8.002143 9.834068 91.30529 127.0468
-Victory      97.00937 8.002143 9.834068 79.13863 114.8801
+     Variety    lsmean       SE       df lower.CL upper.CL
+ Golden Rain 103.88437 8.002143 9.834068 86.01363 121.7551
+  Marvellous 109.17604 8.002143 9.834068 91.30529 127.0468
+     Victory  97.00937 8.002143 9.834068 79.13863 114.8801
 \end{Woutput}
 These predictions are slightly higher than the interpolations mostly because they account for the downward concavity of the fitted quadratics.
 
 
 
+
+\ifx %******************* EXCISED IN FAVOR OF MESSY DATA SECTION ***************************
 \section{Rank deficiencies}
 In many fitted models, predictions may be made at any factor combination. However, some models have rank deficiencies due to collinearity among predictors or missing factor combinations, and this can mess-up predictions. Consider the following example using a simplified model on a subset of the Oats data.
 \begin{Winput}
@@ -354,19 +361,19 @@ R> lsmeans(wildOats.lm, ~ Variety*nitro)
 \end{Winput}
 \begin{Woutput}
 $`Variety:nitro lsmeans`
-                 lsmean       SE df lower.CL upper.CL
-Golden Rain, 0     88.5 18.57514  7 44.57678 132.4232
-Marvellous, 0      97.0 18.57514  7 53.07678 140.9232
-Victory, 0        111.0 26.26921  7 48.88319 173.1168
-Golden Rain, 0.2  108.0 26.26921  7 45.88319 170.1168
-Marvellous, 0.2      NA       NA NA       NA       NA
-Victory, 0.2       77.5 18.57514  7 33.57678 121.4232
-Golden Rain, 0.4  107.5 18.57514  7 63.57678 151.4232
-Marvellous, 0.4   118.0 26.26921  7 55.88319 180.1168
-Victory, 0.4      104.5 18.57514  7 60.57678 148.4232
-Golden Rain, 0.6  122.5 18.57514  7 78.57678 166.4232
-Marvellous, 0.6   140.0 18.57514  7 96.07678 183.9232
-Victory, 0.6         NA       NA NA       NA       NA
+     Variety nitro lsmean       SE df lower.CL upper.CL
+ Golden Rain     0   88.5 18.57514  7 44.57678 132.4232
+  Marvellous     0   97.0 18.57514  7 53.07678 140.9232
+     Victory     0  111.0 26.26921  7 48.88319 173.1168
+ Golden Rain   0.2  108.0 26.26921  7 45.88319 170.1168
+  Marvellous   0.2     NA       NA NA       NA       NA
+     Victory   0.2   77.5 18.57514  7 33.57678 121.4232
+ Golden Rain   0.4  107.5 18.57514  7 63.57678 151.4232
+  Marvellous   0.4  118.0 26.26921  7 55.88319 180.1168
+     Victory   0.4  104.5 18.57514  7 60.57678 148.4232
+ Golden Rain   0.6  122.5 18.57514  7 78.57678 166.4232
+  Marvellous   0.6  140.0 18.57514  7 96.07678 183.9232
+     Victory   0.6     NA       NA NA       NA       NA
 \end{Woutput}
 The results reflect the fact that two lsmeans are non-estimable due to empty cells.
 
@@ -378,10 +385,10 @@ R> lsmeans(typing.lmfoo, ~ type)
 \end{Winput}
 \begin{Woutput}
 $`type lsmeans`
-    lsmean       SE df lower.CL upper.CL
-A 73.56518 3.640583  8 65.16998 81.96038
-B 54.49529 3.722251  8 45.91176 63.07881
-C 49.43953 3.943413  8 40.34600 58.53306
+ type   lsmean       SE df lower.CL upper.CL
+    A 73.56518 3.640583  8 65.16998 81.96038
+    B 54.49529 3.722251  8 45.91176 63.07881
+    C 49.43953 3.943413  8 40.34600 58.53306
 \end{Woutput}
 Everything looks fine, but now plug-in a different value for "hours":
 \begin{Winput}
@@ -389,10 +396,10 @@ R> lsmeans(typing.lmfoo, pairwise ~ type, at = list(hours=65))
 \end{Winput}
 \begin{Woutput}
 $`type lsmeans`
-  lsmean SE df lower.CL upper.CL
-A     NA NA NA       NA       NA
-B     NA NA NA       NA       NA
-C     NA NA NA       NA       NA
+ type lsmean SE df lower.CL upper.CL
+    A     NA NA NA       NA       NA
+    B     NA NA NA       NA       NA
+    C     NA NA NA       NA       NA
 
 $`type pairwise differences`
        estimate       SE df t.ratio p.value
@@ -407,15 +414,94 @@ R> lsmeans(typing.lmfoo, ~ type, at = list(hours=65, foo=3*(65-39)))
 \end{Winput}
 \begin{Woutput}
 $`type lsmeans`
-    lsmean       SE df lower.CL upper.CL
-A 84.48456 3.906175  8 75.47690 93.49221
-B 65.41466 3.775715  8 56.70785 74.12148
-C 60.35891 5.251350  8 48.24927 72.46854
+ type   lsmean       SE df lower.CL upper.CL
+    A 84.48456 3.906175  8 75.47690 93.49221
+    B 65.41466 3.775715  8 56.70785 74.12148
+    C 60.35891 5.251350  8 48.24927 72.46854
 \end{Woutput}
 At the time of this writing, only "lm" and its relatives can support rank deficiencies. Also, even with "lm" objects, "glht" cannot handle rank deficiencies, so an error will occur if you include a non-null "glhargs" argument in "lsmeans".
 
+\fi %************** END OF EXCISED SECTION ************************************
 
 
+
+\section{Messy data}
+To illustrate some more issues, and related \code{lsmeans} capabilities, consider the dataset named \code{nutrition} that is provided with the \code{lsmeans} package. These data come from Milliken and Johnson (1984), and contain the results of an observational study on nutrition education. Low-income mothers are classified by race, age category, and whether or not they received food stamps (the \code{group} factor); and the response variable is a gain score (post minus pre scores) after completing a nutrition training program. The graph below displays the data.
+\begin{Winput}
+R> xyplot(gain ~ age | race*group, data=nutrition)
+\end{Winput}
+\includegraphics[scale=.5]{using-lsmeans-nutr-scatter-fig.pdf}
+
+Consider the model that includes all main effects and two-way interactions; and let us look at the \code{group} by \code{race} lsmeans:
+\begin{Winput}
+R> nutr.lm = lm(gain ~ (age + group + race)^2, data = nutrition)
+R> lsmeans(nutr.lm, ~ group*race)
+\end{Winput}
+\begin{Woutput}
+$`group:race lsmeans`
+      group     race    lsmean       SE df     lower.CL upper.CL
+ FoodStamps    Black  4.708257 2.368117 92  0.004971359 9.411542
+      NoAid    Black -2.190399 2.490576 92 -7.136898097 2.756099
+ FoodStamps Hispanic        NA       NA NA           NA       NA
+      NoAid Hispanic        NA       NA NA           NA       NA
+ FoodStamps    White  3.607680 1.155619 92  1.312521470 5.902838
+      NoAid    White  2.256336 2.389273 92 -2.488966678 7.001638
+\end{Woutput}
+One thing that this illustrates is that \code{lsmeans} incorporates an estimability check, and returns a missing value when a prediction cannot be made uniquely. In this example, we have very few Hispanic mothers in the dataset, resulting in empty cells. This creates a rank deficiency in the fitted model and some predictors are thrown out.
+
+One capability of \code{lsmeans} is that if a factor is included in the \code{at} argument, computations of lsmeans are restricted to the specified level(s). So if we confine ourselves to age group~3, we don't have an estimability issue:
+\begin{Winput}
+R> lsmeans(nutr.lm, ~ group*race, at = list(age = "3"))
+\end{Winput}
+\begin{Woutput}
+$`group:race lsmeans`
+      group     race        lsmean       SE df   lower.CL   upper.CL
+ FoodStamps    Black  7.500000e+00 2.672054 92   2.193071 12.8069292
+      NoAid    Black -3.666667e+00 2.181723 92  -7.999756  0.6664229
+ FoodStamps Hispanic  2.131628e-14 5.344107 92 -10.613858 10.6138584
+      NoAid Hispanic  2.500000e+00 3.778855 92  -5.005131 10.0051312
+ FoodStamps    White  5.419355e+00 0.959830 92   3.513050  7.3256601
+      NoAid    White -2.000000e-01 1.194979 92  -2.573331  2.1733309
+\end{Woutput}
+Nonetheless, the standard errors for the Hispanic mothers are enormous due to very small counts.
+One useful summary of the results is to narrow the scope to two races and the two middle age groups, where most of the data lie. Here are the lsmeans and comparisons within rows and columns
+\begin{Winput}
+R> nutr.lsm = lsmeans(nutr.lm, list(pairwise~group|race, pairwise~race|group),
+R>         at = list(age=c("2","3"), race=c("Black","White")))
+R> nutr.lsm[-3]
+\end{Winput}
+\begin{Woutput}
+$`group:race lsmeans`
+      group  race    lsmean       SE df  lower.CL   upper.CL
+ FoodStamps Black  8.916513 3.423757 92  2.116637 15.7163895
+      NoAid Black -2.190476 1.486593 92 -5.142979  0.7620266
+ FoodStamps White  5.147177 1.059624 92  3.042673  7.2516814
+      NoAid White -0.412500 1.117800 92 -2.632548  1.8075478
+
+$`group:race pairwise differences`
+                            estimate       SE df t.ratio p.value
+FoodStamps - NoAid | Black 11.106989 3.777839 92 2.94004 0.00415
+FoodStamps - NoAid | White  5.559677 1.540221 92 3.60966 0.00050
+    p values are adjusted using the tukey method for 2 means
+
+$`race:group pairwise differences`
+                            estimate       SE df  t.ratio p.value
+Black - White | FoodStamps  3.769336 3.394198 92  1.11052 0.26967
+Black - White | NoAid      -1.777976 1.859956 92 -0.95592 0.34162
+    p values are adjusted using the tukey method for 2 means
+\end{Woutput}
+An interaction plot of the results follows:
+\begin{Winput}
+R> with(nutr.lsm[[1]], interaction.plot(group, race, lsmean, type = "b",
+R>     ylab = "Least-squares mean"))
+\end{Winput}
+\includegraphics[scale=.5]{using-lsmeans-nutr-intplot-fig.pdf}
+\\
+The general conclusion from both is that the expected gains from the training are higher among families receiving food stamps
+Note that this analysis is somewhat different than the results we would obtain by subsetting the data, as we are borrowing information from the other observations in estimating and testing these lsmeans.
+
+
+\clearpage %-------- MANUAL FORMATTING ---------
 \section{GLMM example}
 The dataset "cbpp" in the "lme4" package, originally from Lesnoff \emph{et al.}~(1964), provides data on the incidence of contagious bovine pleuropneumonia in 15 herds of zebu cattle in Ethiopia, collected over four time periods. These data are used as the primary example for the "glmer" function, and it is found that a model that accounts for overdisperion is advantageous; hence the addition of the "(1|obs)" in the model fitted below. 
 
@@ -438,11 +524,11 @@ R> cbpp.lsm
 \end{Winput}
 \begin{Woutput}
 $`period lsmeans`
-     lsmean        SE df asymp.LCL  asymp.UCL pred.incidence
-1 -1.500292 0.2887610 NA -2.066253 -0.9343304     0.18238203
-2 -2.726800 0.3809740 NA -3.473496 -1.9801052     0.06141032
-3 -2.829133 0.3994052 NA -3.611953 -2.0463133     0.05577003
-4 -3.366631 0.5193989 NA -4.384634 -2.3486279     0.03335476
+ period    lsmean        SE df asymp.LCL  asymp.UCL pred.incidence
+      1 -1.500292 0.2887610 NA -2.066253 -0.9343304     0.18238203
+      2 -2.726800 0.3809740 NA -3.473496 -1.9801052     0.06141032
+      3 -2.829133 0.3994052 NA -3.611953 -2.0463133     0.05577003
+      4 -3.366631 0.5193989 NA -4.384634 -2.3486279     0.03335476
 
 $`period differences from control`
        estimate        SE df  z.ratio p.value odds.ratio
@@ -530,6 +616,10 @@ first 2 vs last 2 -29.66667 3.005170 51.000000  -9.87188   0e+00
 \begin{description}
 
 \item[Lesnoff, M., Laval, G., Bonnet, P., \emph{et al.}~(2004)] Within-herd spread of contagious bovine pleuropneumonia in Ethiopian highlands, \emph{Preventive Veterinary Medicine},  \textbf{64}, 27--40.
+
+\item[Milliken, G. A. and Johnson, D. E. (1984)]
+\emph{Analysis of Messy Data -- Volume I: Designed Experiments}. Van Nostrand, ISBN 0-534-02713-7.
+
 
 \item[Oehlert, G. (2000)] \emph{A First Course in Design and Analysis of Experiments}, W.~H.~Freeman.
 This is out-of-print, but now available under a Creative Commons license via \url{http://users.stat.umn.edu/~gary/Book.html} (accessed August 23, 2012).
