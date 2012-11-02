@@ -32,7 +32,7 @@ flush(stderr()); flush(stdout())
 
 ### Name: lsmeans
 ### Title: Least-squares means
-### Aliases: lsmeans print.lsm print.data.frame.lsm
+### Aliases: lsmeans print.lsm print.data.frame.lsm lsm glht.lsmlf
 ### Keywords: models regression htest
 
 ### ** Examples
@@ -70,9 +70,13 @@ if (require(pbkrtest)) {
   lsmeans(Oats.lmer, list(poly ~ nitro, pairwise ~ Variety))
 }
 
-# Use glht (multcomp) to do comparisons (note -- this does not use adjusted vcov)
+# Using in conjunction with 'glht' (note -- this does not use adjusted vcov)
 if (require(multcomp)) {
-  lsmeans(Oats.lmer, pairwise ~ Variety, glhargs=list(df=9.5))
+  # calling 'glht' from 'lsmeans' ...
+  lsmeans(Oats.lmer, pairwise ~ Variety, glhargs=list(df=9))
+  
+  # calling 'lsmeans' from 'glht' to get simultaneous CIs
+  confint(glht(Oats.lmer, linfct = lsm(~ Variety), df=9))
 }
 
 # Custom contrasts

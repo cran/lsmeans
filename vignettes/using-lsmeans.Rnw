@@ -111,9 +111,9 @@ Fit: lm(formula = pain ~ hours + type, data = typing)
 
 Linear Hypotheses:
            Estimate Std. Error t value Pr(>|t|)
-A - B == 0   19.070      5.082   3.753  0.01374 *
-A - C == 0   24.126      5.560   4.339  0.00595 **
-B - C == 0    5.056      5.720   0.884  0.66412
+A - B == 0   19.070      5.082   3.753  0.01371 *
+A - C == 0   24.126      5.560   4.339  0.00615 **
+B - C == 0    5.056      5.720   0.884  0.66421
 ---
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 (Adjusted p values reported -- single-step method)
@@ -123,6 +123,16 @@ The $p$~values are slightly different, as expected. We may of course use other m
 R> plot(typing.lsm[[2]])
 \end{Winput}
 \includegraphics[scale=.6]{using-lsmeans-typing-glht-plot-fig.pdf}
+
+Besides being able to call "glht" from "lsmeans", we have also provided an "lsm" function and an associated "glht" method so that we can call "lsmeans" from withing "glht". We use "lsm" in much the same way as "mcp" in the "multcomp" package. Here we display simultaneous confidence intervals for the lsmeans:
+\begin{Winput}
+R> typing.glht = glht(typing.lm, linfct = lsm(~ type))
+R> plot(typing.glht)
+\end{Winput}
+\includegraphics[scale=.6]{using-lsmeans-typing-confint-plot-fig.pdf}
+\\
+\clearpage %%% MANUAL FORMATTING %%%
+Unlike "lsmeans" which returns a list, the design of "lsm" is to create just one set of linear functions to hand to "glht". In the illustration above, there is no left-hand side of the formula, so the linear functions of the lsmeans themselves are used. If we had instead specified "lsm(pairwise ~ type)", then the results would have been the same as shown earlier for the pairwise differences. 
 
 
 \section{Two-factor example}
@@ -238,6 +248,7 @@ R> with(Oats, interaction.plot(nitro, Variety, yield, type="b"))
 \includegraphics[scale=.5]{using-lsmeans-oats-intplot2-fig.pdf}
 \\
 There is not much evidence of an interaction. In this dataset, we have random factors "Block" and "Block:Variety" (which identifies the plots). So we will fit a linear mixed-effects model that accounts for these. Another technicality is that "nitro" is a numeric variable, and initially we will model it as a factor. We will use "lmer" in the "lme4" package to fit a model.
+\enlargethispage{-36pt} %%% MANUAL FORMATTING %%%
 \begin{Winput}
 R> library(lme4, quietly = TRUE, warn.conflicts = FALSE)
 R> Oats.lmer = lmer(yield ~ Variety + factor(nitro) + (1 | Block/Variety), data=Oats)
@@ -419,7 +430,7 @@ $`type lsmeans`
     B 65.41466 3.775715  8 56.70785 74.12148
     C 60.35891 5.251350  8 48.24927 72.46854
 \end{Woutput}
-At the time of this writing, only "lm" and its relatives can support rank deficiencies. Also, even with "lm" objects, "glht" cannot handle rank deficiencies, so an error will occur if you include a non-null "glhargs" argument in "lsmeans".
+At the time of this writing, only "lm" and its relatives can support rank deficiencies. 
 
 \fi %************** END OF EXCISED SECTION ************************************
 
@@ -501,7 +512,7 @@ The general conclusion from both is that the expected gains from the training ar
 Note that this analysis is somewhat different than the results we would obtain by subsetting the data, as we are borrowing information from the other observations in estimating and testing these lsmeans.
 
 
-\clearpage %-------- MANUAL FORMATTING ---------
+%\clearpage %-------- MANUAL FORMATTING ---------
 \section{GLMM example}
 The dataset "cbpp" in the "lme4" package, originally from Lesnoff \emph{et al.}~(1964), provides data on the incidence of contagious bovine pleuropneumonia in 15 herds of zebu cattle in Ethiopia, collected over four time periods. These data are used as the primary example for the "glmer" function, and it is found that a model that accounts for overdisperion is advantageous; hence the addition of the "(1|obs)" in the model fitted below. 
 
