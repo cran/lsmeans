@@ -1,10 +1,20 @@
 Changelog for 'lsmeans' package
 
+1.05-00 - November 2, 2012
+    Added an 'lf' boolean argument to return the matrices of linear functions
+        without evaluating them
+    Added a function 'lsm' and corresponding method for 'glht'; thus, now we
+        can use lsm() much like mcp()
+    Changed examples with glht to integer df -- due to a recent change in mvtnorm
+        glhargs$df is coerced to an integer before passing, but in lsm() it is
+        up to the user to pass appropriate arguments to glht
+
+
 1.00-00 - October 19, 2012
     Added support for factors in 'at' argument (can use it to restrict results)
     Added columns with factor levels to lsmeans table - for possible use in plots
     Extended trt.vs.ctrl.lsmc to accommodate more than one reference level
-        (Thanks to Florent Duyme, ARVALIS - Institut du végétal, for suggesting this)
+        (Thanks to Florent Duyme, ARVALIS - Institut du v?g?tal, for suggesting this)
     Refinements to print methods, including new class 'data.frame.lsm' to display 
         results the way I want them
     If 'glhargs' is used, those elements are now of class 'summary.glht'. 
