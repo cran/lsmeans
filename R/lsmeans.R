@@ -13,8 +13,9 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
             warning("'glhargs' option disabled because 'multcomp' package not installed")
         }
         # force integer df since mvtnorm no longer supports fractional
+        # I choose to round up if it's within .2 of next integer
         else {
-            if (!is.null(glhargs$df)) glhargs$df = as.integer(max(1, floor(glhargs$df)))
+            if (!is.null(glhargs$df)) glhargs$df = as.integer(max(1, .2 + glhargs$df))
         }
     }
     
@@ -188,7 +189,8 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
     
     
     # Get a vector of terms in the model, for checking
-    mod.terms = strsplit(as.character(formrhs[2])[[1]], "\\+")[[1]]
+    mod.terms = attr(Terms, "term.labels")
+        ### was strsplit(as.character(formrhs[2])[[1]], "\\+")[[1]]
     
 ##### routine returns TRUE iff all elements of facs are contained in a model term with another predictor
     some.term.contains = function(facs) {

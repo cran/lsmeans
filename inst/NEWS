@@ -1,5 +1,9 @@
 Changelog for 'lsmeans' package
 
+1.05-01 - December 5, 2012
+    Fixed a bug that occurs when model contains expressions like (a + b + c)^2
+        or other expressions that expand to interaction terms
+
 1.05-00 - November 2, 2012
     Added an 'lf' boolean argument to return the matrices of linear functions
         without evaluating them
