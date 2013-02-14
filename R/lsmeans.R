@@ -1,5 +1,5 @@
 lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.methods), conf = .95, 
-                   at, contr=list(), 
+                   at, trend, contr=list(), 
                    cov.reduce = function(x, name) mean(x), 
                    fac.reduce = function(coefs, lev) apply(coefs, 2, mean), 
                    glhargs=NULL, lf = FALSE,
@@ -29,11 +29,17 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
     }
     autoadj = (adj == 1)
     
+    trend.flag = !missing(trend)
+    
 # Get RHS of model formula
     if (inherits(object, "gls"))
         Terms = getCovariateFormula(object)
     else
-        Terms = delete.response(terms(object))
+        Terms = terms(object)
+### was    Terms = delete.response(terms(object))
+### but we need to keep track of complete cases, including y values
+### (Correction 2-13-13, version 1.06-05)    
+    
     # get the pure formula w/o extra stuff
     formrhs = formula(Terms)
     
@@ -120,7 +126,11 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
     form = as.formula(paste("~", paste(nm, collapse = "+")))
     envir = attr(Terms, ".Environment")
     X = model.frame(form, eval(thecall$data, envir=envir), 
-                    subset = eval(thecall$subset, enclos=envir))
+                    subset = eval(thecall$subset, enclos=envir),
+                    na.action = na.omit, drop.unused.levels = TRUE)
+### Correction 2-13-13, version 1.06-05 -- 
+### added drop.unused terms and na.omit to above
+    
     # Now X contains the data used to fit the model, w/o any expansions (e.g. poly() calls)
 
 # Start accumulating info for the vars. 
@@ -159,8 +169,35 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
             }
         }
     }
+    
+    # If 'trend' present, we'll set up a difference quotient based on 
+    # a fraction of the range of the variable
+    if (trend.flag) {
+        # trend could be a variable or a term; 
+        # set up trend.xnm to always be variable names(s)
+        if (! is.character(trend))
+            stop("'trend' must be of character type")
+        trend.xnm = trend[1]
+        trend.x = X[[trend.xnm]]
+        if (is.null(trend.x)) { 
+# 'trend' not found, so hold out for possibility that it is the name of a term
+            trend.xnm = try(all.vars(as.formula(paste("~",trend))), silent=TRUE)
+            if (inherits(trend.xnm, "try-error")) 
+                trend.xnm = character(0)
+            trend.h = -1 # flag that trend is a term
+        }
+        else {
+            if (!is.numeric(trend.x))
+                stop("'trend' must refer to a numeric predictor")
+            trend.h = diff(range(trend.x))*.001
+            baselevs[[trend]] = baselevs[[trend]][1] + c(-1,1) * trend.h / 2
+            # rearrange ordering so trend variable is first - makes bookkeeping easier
+            sidx = match(trend, names(baselevs))
+            baselevs = c(baselevs[sidx], baselevs[-sidx])
+        }
+    }
     # OK. Now make a grid of the factor levels of interest, along w/ covariate "at" values
-    grid = do.call("expand.grid", baselevs)
+    grid = do.call(expand.grid, baselevs)
     # add any matrices
     for (nm in names(matdat))
         grid[[nm]] = matrix(rep(matdat[[nm]], each=nrow(grid)), nrow=nrow(grid))
@@ -177,8 +214,41 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
     # WARNING -- This will overwrite X, so get anything you need from X BEFORE we get here
     m = model.frame(Terms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(Terms, m, contrasts.arg = contrasts)
-    # use only the columns with non-missing regr coefs
-    #--- OMITTED--we'll handle this later X = X[ , used]
+
+    # Compute the derivatives when 'trend' is provided
+    if(trend.flag) {
+        if (trend.h < 0) { # 'trend' is a term - fix the coefs
+            # wipe-out spaces to make it less fussy
+            term.nm = gsub(" ", "", dimnames(X)[[2]])
+            trend = gsub(" ", "", trend)
+            trend.idx = match(trend, term.nm)
+            if (is.na(trend.idx))
+                stop(paste("trend value '", trend, "' is neither a variable nor a model term", sep=""))
+            prev.X = X
+# Symbolic differentiation... Replace columns of X with:
+#  1 if it is col for trend
+#  0 if it does not contain trend
+#  previous version of X[,j] where j is interaction of other predictors            
+            for (i in 1:ncol(X)) {
+                trm = term.nm[i]
+                trm.pieces = strsplit(trm, ":")[[1]]
+                trm.mat = match(trend, trm.pieces)
+                if (is.na(trm.mat))
+                    X[, i] = 0
+                else {
+                    trm.otr = paste(trm.pieces[-trm.mat], collapse=":")
+                    trm.ref = match(trm.otr, term.nm)
+                    if (is.na(trm.ref))     X[, i] = 0 + (i == trend.idx)
+                    else                    X[, i] = prev.X[, trm.ref]
+                }
+            }
+        }
+        else { # 'trend' is a variable - do the diff quotient
+            evens = 2 * (1:(nrow(X)/2))
+            X = (X[evens, ] - X[evens-1, ]) / trend.h
+            grid = grid[evens, , drop=FALSE]
+        }
+    }
     
     # If necessary revise grid with corced numeric factors replaced with factor levels
     if (length(coerced) > 0) grid = do.call("expand.grid", baselevs)
@@ -194,6 +264,9 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
     
 ##### routine returns TRUE iff all elements of facs are contained in a model term with another predictor
     some.term.contains = function(facs) {
+        # When checking trend, add that variable to the mix
+        if(trend.flag) 
+            facs = union(facs, trend.xnm)
         for (trm in mod.terms) {
             flag = all(sapply(facs, function(f) length(grep(f,trm))>0))
             if (flag) 
@@ -280,31 +353,40 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
         }
         
         # LS means
+        if (!trend.flag) {
+            effname = "lsmean"
+            lsmentry = paste(facs.lbl, "lsmeans")
+        }
+        else {
+            effname = paste(trend, "trend", sep=".")
+            lsmentry = paste(effname, "by", facs.lbl)
+        }
+
         if (lf) {
-            results[[paste(facs.lbl, "lsmeans")]] = t(K)
+            results[[lsmentry]] = t(K)
         }
         else {
             lsms = as.data.frame(t(apply(K,2,do.est)))
             # fix-up names and get CIs
-            names(lsms)[1] = "lsmean"
+            names(lsms)[1] = effname
             # include factor levels
             lsms = cbind(combs, lsms)
             if (conf > 1) conf = conf/100 # pct --> frac
             if ((conf < 1) && (conf > .01)) {
                 if (is.null(ddfm)) {
                     me = qnorm((1-conf)/2, lower.tail=FALSE) * lsms$SE
-                    lsms$asymp.LCL = lsms$lsmean - me
-                    lsms$asymp.UCL = lsms$lsmean + me
+                    lsms$asymp.LCL = lsms[[effname]] - me
+                    lsms$asymp.UCL = lsms[[effname]] + me
                 }
                 else {
                     me = qt((1-conf)/2, lsms$df, lower.tail=FALSE) * lsms$SE
-                    lsms$lower.CL = lsms$lsmean - me
-                    lsms$upper.CL = lsms$lsmean + me
+                    lsms$lower.CL = lsms[[effname]] - me
+                    lsms$upper.CL = lsms[[effname]] + me
                 }
             }
             attr(lsms, "print.row.names") = FALSE
             class(lsms) = c("data.frame.lsm", "data.frame")
-            results[[paste(facs.lbl, "lsmeans")]] = lsms
+            results[[lsmentry]] = lsms
         }        
         
         # Do requested contrasts
