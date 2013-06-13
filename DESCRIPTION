@@ -1,8 +1,8 @@
 Package: lsmeans
 Type: Package
 Title: Least-squares means
-Version: 1.06-05
-Date: 2013-02-13
+Version: 1.06-06
+Date: 2013-06-13
 Encoding: latin1
 Author: Russell V. Lenth
 Maintainer: Russ Lenth <russell-lenth@uiowa.edu>
@@ -16,6 +16,7 @@ Description: This package provides the function 'lsmeans' for
         compute contrasts or linear combinations of these least-squares
         means, and several standard contrast families are provided.
 License: GPL-2
-Packaged: 2013-02-13 21:26:23 UTC; rlenth
+Packaged: 2013-06-13 21:46:33 UTC; rlenth
+NeedsCompilation: no
 Repository: CRAN
-Date/Publication: 2013-02-14 07:35:49
+Date/Publication: 2013-06-14 07:01:47
