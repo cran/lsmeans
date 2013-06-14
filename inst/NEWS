@@ -1,5 +1,10 @@
 Changelog for 'lsmeans' package
 
+1.06-06 - June 13, 2013
+    Provides for compatibility with the gitHub (current) version of lme4.
+    Comment to lme4 developers: Either put the newest version on CRAN, or
+      pull it from CRAN, or rename one of those. This is too much confusion.
+
 1.06-05 - February 13, 2013
     Fixed a bug whereby unused levels of factors can create havoc.
 
