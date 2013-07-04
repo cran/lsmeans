@@ -1,9 +1,24 @@
 Changelog for 'lsmeans' package
 
+1.10-00 
+    Added contrast families for effects and "deleted effects"
+    Added "scheffe" option for 'adjust' argument
+    Added lsmip function (interaction plots)
+    Fixed Tukey-adjusted P values for d.f. near 2. 
+        (Note: ptukey does not work when there are less than 2 d.f.)
+    Allow covariates in 'specs' formula (also allows covariates to
+        have multiple levels and be part of the reference grid that
+        is averaged over in determining LS means)
+    Allow cov.reduce to be logical - mostly to implement a 'unique' option
+    No d.f. or adjusted covariance matrix for GLMMs (questionable validity, 
+        plus pbkrtest won't play along)
+    Now checks lengths of contrast coef's for conformity
+    Fixed a bug in estimability checking (occurred when qr.R does not 
+        return a square matrix)
+    Efficiency improvements. Now requires 'plyr' package
+
 1.06-06 - June 13, 2013
-    Provides for compatibility with the gitHub (current) version of lme4.
-    Comment to lme4 developers: Either put the newest version on CRAN, or
-      pull it from CRAN, or rename one of those. This is too much confusion.
+    Added support for lmerMod objects (gitHub version of lme4)
 
 1.06-05 - February 13, 2013
     Fixed a bug whereby unused levels of factors can create havoc.

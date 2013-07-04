@@ -1,4 +1,4 @@
-lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.methods), conf = .95, 
+lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","scheffe",p.adjust.methods), conf = .95, 
                    at, trend, contr=list(), 
                    cov.reduce = function(x, name) mean(x), 
                    fac.reduce = function(coefs, lev) apply(coefs, 2, mean), 
@@ -19,8 +19,14 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
         }
     }
     
+# added 6-18-2013 - allow cov.reduce to be logical
+    if (is.logical(cov.reduce)) {
+        if (cov.reduce) cov.reduce = function(x, name) mean(x)
+        else cov.reduce = function(x, name) sort(unique(x))
+    }
+    
     # for later use
-    adjtbl = c("auto","tukey","sidak",p.adjust.methods)
+    adjtbl = c("auto","tukey","sidak","scheffe",p.adjust.methods)
     no.adj = pmatch("none", adjtbl)
     adj = pmatch(adjust, adjtbl)[1]
     if (is.na(adj)) {
@@ -48,16 +54,18 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
     
 # Figure out thecall (fixed effects part of model), bhat (=coefs), contrasts attr
     if (inherits(object, "mer") || inherits(object, "merMod")) {
-        if(!isLMM(object)) 
+        if(!isLMM(object) && !isGLMM(object)) 
             stop("Can't handle a nonlinear mixed model")
         thecall = slot(object, "call")
         bhat = fixef(object)
         contrasts = attr(model.matrix(object), "contrasts")
-        if (require("pbkrtest")) {
-            adjV = vcovAdj(object, 0)
-            ddfm = function(k, se) .KRdf.mer (adjV, V, k, se*se)
+        if (isLMM(object)) {
+            if (require("pbkrtest")) {
+                adjV = vcovAdj(object, 0)
+                ddfm = function(k, se) .KRdf.mer (adjV, V, k, se*se)
+            }
+            else warning("Install package 'pbkrtest' to obtain bias corrections and degrees of freedom")
         }
-        else warning("Install package 'pbkrtest' to obtain bias corrections and degrees of freedom")
     }
     else if (inherits(object, "lme")) {
         thecall = object$call
@@ -101,10 +109,13 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
     if (length(not.used) > 0) {
         # null space of X is same as null space of R in QR decomp
         tR = t(qr.R(object$qr))
+        if (ncol(tR) < nrow(tR)) # add columns if not square
+            tR = cbind(tR, matrix(0, nrow=nrow(tR), ncol=nrow(tR)-ncol(tR)))
         rank = object$qr$rank
         # last few rows are zero -- add a diagonal
-        for (i in (rank+1):nrow(tR)) tR[i,i] = 1
-        null.basis = qr.resid(qr(tR[, 1:rank]), tR[, -(1:rank)])
+        for (i in (rank+1):nrow(tR)) 
+            tR[i,i] = 1
+        null.basis = qr.resid(qr(tR[, seq_len(rank)]), tR[, -seq_len(rank)])
         if (!is.matrix(null.basis)) null.basis = matrix(null.basis, ncol=1)
         # permute the rows via pivot
         null.basis[object$qr$pivot, ] = null.basis
@@ -116,7 +127,7 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
 # Figure out if any are coerced to factor or ordered
     anm = all.names(formrhs)    
     coerced = anm[1 + grep("factor|ordered", anm)]
-   
+    
 # Obtain a simplified formula -- needed to recover the data in the model    
     form = as.formula(paste("~", paste(nm, collapse = "+")))
     envir = attr(Terms, ".Environment")
@@ -130,14 +141,16 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
 
 # Start accumulating info for the vars. 
 # baselevs has the levels of all factors, or the "at" values for all covariates
-# xlev has the factor levels only, for use in model.frame and check.cells calls
+# xlev has the factor levels only, for use in model.frame calls
     baselevs = xlev = matdat = list()
     # allow a vector of character strings
     if (is.character(specs)) specs = as.list(specs)
     # allow a single formula
     if (!is.list(specs)) specs = list(specs)
+    
+    all.var.names = names(X)
  
-    for (xname in names(X)) {
+    for (xname in all.var.names) {
         obj = X[[xname]]
         if (is.factor(obj)) {            
             xlev[[xname]] = levels(obj)
@@ -161,6 +174,10 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
                     baselevs[[xname]] = at[[xname]]
                 else 
                     baselevs[[xname]] = cov.reduce(obj, xname)
+            # Keep track of covariates with more than one level
+            #    if (length(baselevs[[xname]]) > 1)
+            #        mult.covar = c(mult.covar, xname)
+                
             }
         }
     }
@@ -191,8 +208,18 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
             baselevs = c(baselevs[sidx], baselevs[-sidx])
         }
     }
+    
+    # Keep the response variable from enlarging the grid, no matter what
+    yidx = attr(Terms, "response")
+    if (yidx > 0) {
+        yname = as.character(attr(Terms, "variables")[[1 + yidx]])
+        if (!is.na(match(yname, names(baselevs))[1])) 
+            baselevs[[yname]] = NA
+    }
+    
     # OK. Now make a grid of the factor levels of interest, along w/ covariate "at" values
     grid = do.call(expand.grid, baselevs)
+    
     # add any matrices
     for (nm in names(matdat))
         grid[[nm]] = matrix(rep(matdat[[nm]], each=nrow(grid)), nrow=nrow(grid))
@@ -200,10 +227,12 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
     # It turns out that numerics coerced to factors are a real pain in the butt when it comes
     # to matching levels. Life will be simpler if we turn them into factors in the X matrix 
     # and update the base levels accordingly with the same labels
-    for (var in coerced) {
-        X[[var]] = factor(X[[var]])
-        baselevs[[var]] = levels(X[[var]])
-    }
+    #
+    #--- Version 1.10 - I don't think I need this anymore with new matching routine
+#     for (var in coerced) {
+#         X[[var]] = factor(X[[var]])
+#         baselevs[[var]] = levels(X[[var]])
+#     }
 
     # Now make a new dataset with just the factor combs and covariate values we want for prediction
     # WARNING -- This will overwrite X, so get anything you need from X BEFORE we get here
@@ -224,7 +253,7 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
 #  1 if it is col for trend
 #  0 if it does not contain trend
 #  previous version of X[,j] where j is interaction of other predictors            
-            for (i in 1:ncol(X)) {
+            for (i in seq_len(ncol(X))) {
                 trm = term.nm[i]
                 trm.pieces = strsplit(trm, ":")[[1]]
                 trm.mat = match(trend, trm.pieces)
@@ -239,17 +268,23 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
             }
         }
         else { # 'trend' is a variable - do the diff quotient
-            evens = 2 * (1:(nrow(X)/2))
+            evens = 2 * (seq_len(nrow(X)/2))
             X = (X[evens, ] - X[evens-1, ]) / trend.h
+            # restore the base levels
+            baselevs[[trend]] = baselevs[[trend]][1] + trend.h/2
             grid = grid[evens, , drop=FALSE]
         }
     }
     
-    # If necessary revise grid with corced numeric factors replaced with factor levels
+    # If necessary revise grid with coerced numeric factors replaced with factor levels
     if (length(coerced) > 0) grid = do.call("expand.grid", baselevs)
     
     # All factors (excluding covariates)
-    allFacs = c(names(xlev), coerced)
+    # version 1.10 - no longer excluding covariates
+    allFacs = all.var.names
+    
+    ### Array of indexes for rows of X, organized by dimensions
+    row.indexes = array(seq_len(nrow(X)), sapply(baselevs, length))
     
     
     
@@ -274,7 +309,7 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
     
     # Initialize a list to hold the results to return
     results = list()
-    for (i in 1:length(specs)) {
+    for (i in seq_len(length(specs))) {
         form = specs[[i]]
         # convert a string to a formula
         if (is.character(form)) form = as.formula(paste("~",form))
@@ -300,22 +335,34 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
         b = strsplit(as.character(form[2]), "\\|")[[1]]
         if (length(b) > 1) byfacs = all.vars(as.formula(paste("~",b[2])))
         
+        
         # create the grid of factor combinations
         levs = list()
         for (f in facs) levs[[f]] = baselevs[[f]]
         combs = do.call("expand.grid", levs)
-        
-        # For each comb, find the needed lin. comb. of bhat to estimate
-        # (These will end up being the COLUMNS of K)
-        K = apply(combs, 1, function(lev) {
-            matches = apply(grid, 1, function(row) {
-                #### DEL if (is.numeric(lev)) all(abs(as.numeric(row[facs]) - lev) < .001)  else 
-                all(row[facs] == lev)
-            })
-            nmat = sum(matches)
-            if (nmat == 0) stop(paste("Can't predict at level", lev, "of", "facs.lbl"))
-            else fac.reduce(X[matches, , drop=FALSE], lev)
+
+### New (version 1.10) more efficient derivation of K matrix
+        RI = plyr:::splitter_a(row.indexes, match(facs, names(baselevs)))
+    # Each entry of RI has the row indexes of X
+    # for each combination of facs (in expand.grid order)
+        K = sapply(RI, function(idx) {
+            fac.reduce(X[idx, , drop=FALSE], "")
         })
+                
+#--- above code replaces pre-1.10 code below...
+#         # For each comb, find the needed lin. comb. of bhat to estimate
+#         # (These will end up being the COLUMNS of K)
+#         K = apply(combs, 1, function(lev) {
+#             matches = apply(grid, 1, function(row) {
+#                 if (is.numeric(lev)) 
+#                     all(zapsmall(as.numeric(row[facs]) - lev) == 0) 
+#                 else
+#                     all(row[facs] == lev)
+#             })
+#             nmat = sum(matches)
+#             if (nmat == 0) stop(paste("Can't predict at level", lev, "of", "facs.lbl"))
+#             else fac.reduce(X[matches, , drop=FALSE], lev)
+#         })
         rnames = dimnames(K)[[2]] = apply(combs, 1, paste, collapse=", ")
         
     #### Here is the fcn I'll call to table an estimate of k'beta
@@ -335,13 +382,15 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
         }
     
     ##### Compute adjusted p value
+    # I added zapsmall in ptukey call, seems to help with its flaky behavior
         adj.p.value = function(t, df, meth, fam.size, n.contr) {
             abst = abs(t)
-            if (meth <= 3)
+            if (meth <= 4)
                 switch(meth,
-                       NA,                                                   # should not happen
-                       ptukey(sqrt(2)*abst, fam.size, df, lower.tail=FALSE), # tukey
-                       1 - (1 - 2*pt(abst, df, lower.tail=FALSE))^n.contr,   # sidak
+                       NA,                                                     # should not happen
+                       ptukey(sqrt(2)*abst, fam.size, zapsmall(df), lower.tail=FALSE),   # tukey
+                       1 - (1 - 2*pt(abst, df, lower.tail=FALSE))^n.contr,     # sidak
+                       pf(t^2/(fam.size-1), fam.size-1, df, lower.tail=FALSE)  # scheffe
                 )
             else
                 p.adjust(2*pt(abst, df, lower.tail=FALSE), adjtbl[meth], n=n.contr)
@@ -392,12 +441,12 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
                 else NULL
             
             # bylist will be a list of subsets of the combs to be contrasted
-            if (is.null(byfacs)) bylist = list(1:nrow(combs)) # all in one set
+            if (is.null(byfacs)) bylist = list(seq_len(nrow(combs))) # all in one set
             else {
                 bg = list()
                 for (f in byfacs) bg[[f]] = baselevs[[f]]
                 bygrid = do.call("expand.grid", bg)
-                bylist = lapply(1:nrow(bygrid), function(row) {
+                bylist = lapply(seq_len(nrow(bygrid)), function(row) {
                     bylevs = bygrid[row,]
                     if (length(byfacs)>1) flags = apply(combs[ , byfacs], 1, function(r) all(r==bylevs))
                     else flags = combs[,byfacs] == bylevs
@@ -415,13 +464,18 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
             
             # OK, let's go thru the bylist
             nby = length(bylist)
-            for (i in 1:nby) {
+            for (i in seq_len(nby)) {
                 rows = bylist[[i]]
                 cl = if(is.null(confcn)) contr[[method]] 
                     else confcn(rnames[rows] , ...)
                 if (is.null(cl)) stop(paste("Unknown contrast family:", method))
                 clx = lapply(cl, function(cc) {
-                    ccc = zer; ccc[rows]=cc; ccc
+                    if(length(cc) != length(rows))
+                        stop(paste(length(cc), " contrast coefficients in '", method, 
+                                   "' when ", length(rows), " were expected", sep=""))
+                    ccc = zer; 
+                    ccc[rows]=cc; 
+                    ccc
                 })
                 if (nby > 1) names(clx) = paste(names(clx), "|", bylabs[i])
                 
@@ -462,8 +516,7 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
                 adjattr = attr(cl, "adjust")
                 if (autoadj) adj = ifelse(is.null(adjattr), no.adj, pmatch(adjattr, adjtbl))
                 if (is.na(adj)) adj = no.adj
-                
-                ctbl = as.data.frame(t(sapply(Clist, function(con) {
+                ctbl = as.data.frame(t(sapply(Clist, function(con) {                    
                     nz = which(abs(con) > .0001)
                     k = K[ , nz] %*% con[nz]
                     do.est(k)
@@ -496,10 +549,22 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak",p.adjust.metho
     results
 }
 
+#---removed - not really needed, & apparently not more efficient than splitter_a
+# # My version of plyr:::splitter_a, but returns a matrix
+# # On return, each column has the elements of .array for each combination of .margins
+# # Order of columns is same as obtained using expand.grid with the same variables
+# .mysplit = function(.array, .margins) {
+#     dims = dim(.array)
+#     len = length(dims)
+#     if (any(.margins > len))
+#         stop ("'.margins' exceeds dimensions of '.array'")
+#     prm = c(setdiff(seq_len(len), .margins), .margins)
+#     matrix(aperm.default(.array, prm, FALSE), ncol = prod(dims[.margins]))
+# }
 
 ### S3 print method for "lsm" class - only reason we need this now is to support the 'omit' arg
 print.lsm = function(x, omit=NULL, ...) {
-    for (i in 1:length(x)) {
+    for (i in seq_len(length(x))) {
         if (i %in% omit) next
         cat(paste("$`", names(x)[i], "`\n", sep="")) # mimic print method for lists
         print(x[[i]])
@@ -513,7 +578,7 @@ print.data.frame.lsm = function(x, ...) {
     print.data.frame(x, row.names=attr(x, "print.row.names"))
     msg = attr(x, "mesg")
     if (!is.null(msg)) 
-        for (j in 1:length(msg)) cat(paste("   ", msg[j], "\n"))
+        for (j in seq_len(length(msg))) cat(paste("   ", msg[j], "\n"))
     invisible(x)
 }
 

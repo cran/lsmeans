@@ -4,7 +4,7 @@ options(warn = 1)
 options(pager = "console")
 library('lsmeans')
 
-base::assign(".oldSearch", base::search(), pos = 'CheckExEnv')
+assign(".oldSearch", search(), pos = 'CheckExEnv')
 cleanEx()
 nameEx("fiber")
 ### * fiber
@@ -82,26 +82,7 @@ if (require(multcomp)) {
 # Custom contrasts
 lsmeans(Oats.lmer, my.own ~ Variety, 
   contr = list(my.own = list(G.vs.M = c(1,-1,0), GM.vs.V = c(.5,.5,-1))))
-  
-#### Examples with trends...
-# Model with interaction
-fiber.lm2 = lm(strength ~ diameter * machine, data = fiber)
-# Compare the linear trends for diameter
-lsmeans(fiber.lm2, pairwise ~ machine, trend = "diameter")
 
-# Model with log(diameter) as the covariate
-fiber.lm3 = lm(strength ~ log(diameter) * machine, data = fiber)
-# Compare the fitted linear trends for log(diameter)
-lsmeans(fiber.lm3, pairwise ~ machine, trend = "log(diameter)")
-
-# Compare the fitted linear trends for diameter itself 
-# - this is done via a diff quotient - compare with fiber.lm2 results
-lsmeans(fiber.lm3, pairwise ~ machine, trend = "diameter")
-
-# Examine the linear functions generated for these examples
-lsmeans(fiber.lm2, ~ machine, trend = "diameter", lf = TRUE)
-lsmeans(fiber.lm3, ~ machine, trend = "log(diameter)", lf = TRUE)
-lsmeans(fiber.lm3, ~ machine, trend = "diameter", lf = TRUE)
 
 
 
@@ -165,7 +146,7 @@ poly.lsmc(1:4)
 
 ### * <FOOTER>
 ###
-base::cat("Time elapsed: ", proc.time() - base::get("ptime", pos = 'CheckExEnv'),"\n")
+cat("Time elapsed: ", proc.time() - get("ptime", pos = 'CheckExEnv'),"\n")
 grDevices::dev.off()
 ###
 ### Local variables: ***
