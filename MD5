@@ -1,13 +1,13 @@
-509cdc1b87d3b3d92b4b423c47def83e *DESCRIPTION
+dc240cb548cc86cedbbc4698c72ff50c *DESCRIPTION
 ed9a5b4c6a1b93b51339ca15861568dc *NAMESPACE
 70aaa1c959e9a8e1fd24dd5e234bde28 *R/KRstuff.R
 bcb63ca960692b5491e41e2af24aaac8 *R/lsm-contr.R
-ea68056c7e9a2dd1ecba958d9604951a *R/lsmeans.R
+9beca1e3169e4285b0fc1b45d4743eeb *R/lsmeans.R
 a5593503b87568c0b31a5e3332ead71b *R/lsmip.R
 6ec8d6a66b7899a31b4f7f5bd2c1513d *R/lsmlf.R
 f204c1431e151e2459178e8f4fc8f0e8 *data/fiber.RData
 298a5159a77e201ffe1410cf80282eff *data/nutrition.RData
-97eb3bd277b8c158cc69e6310026ed53 *inst/NEWS
+3861ecb5b8c8134447cb12791a41d14f *inst/NEWS
 c0d3e54e47050a60700f2b4686252204 *inst/doc/using-lsmeans.R
 610a58109266ba42fe1b541588098497 *inst/doc/using-lsmeans.Rnw
 81d76e8495a4948804cb4a1c9037920f *inst/doc/using-lsmeans.pdf
@@ -30,8 +30,4 @@ bcc375ec2333d134906ac5a3c6bcf059 *vignettes/using-lsmeans-oat-poly-lsmip-fig.pdf
 7aa3143856c5de76fbb382a135ab9b43 *vignettes/using-lsmeans-typing-scatter-fig.pdf
 9c4daebbf2947b9abdc68b507fc89a4a *vignettes/using-lsmeans-warp-intplot-fig.pdf
 610a58109266ba42fe1b541588098497 *vignettes/using-lsmeans.Rnw
-43ee840d69751f06c4b791ca78f4274a *vignettes/using-lsmeans.aux
-60e9b629dc839e04e7978c9783050760 *vignettes/using-lsmeans.log
-900abb442842f6f917f7b410f14206bb *vignettes/using-lsmeans.out
 73bc08f9095aa2ed263c36e0fcb9dc5f *vignettes/using-lsmeans.swv
-256f90d7039baa41a1d473a8d24054b0 *vignettes/using-lsmeans.tex
