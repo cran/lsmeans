@@ -15,7 +15,7 @@ lsmeans(object, specs, adjust = c("auto","tukey","sidak","scheffe", p.adjust.met
   conf = .95, at, trend, contr = list(), 
   cov.reduce = function(x, name) mean(x), 
   fac.reduce = function(coefs, lev) apply(coefs, 2, mean), 
-  glhargs = NULL, lf = FALSE, ...)
+  glhargs = NULL, lf = FALSE, mlf = rep(1,nresp)/nresp, ...)
   
 \method{print}{lsm}(x, omit = NULL, ...)
 \method{print}{data.frame.lsm}(x, ...)
@@ -68,7 +68,9 @@ A function of \code{coefs} and \code{lev} where \code{lev} is the level of a fac
 The argument \code{coefs} is a matrix whose rows correspond to the combinations of all factors in the model other than those involved in the \code{lsmeans} specification. Each row has the coefficients for the linear combination of the regression coefficients to be used in that case. By default, these rows are averaged together (mimicking SAS), but the user may override that behavior. Besides \code{lev}, \code{names(lev)} will provide the name of the factor or factor combination, and the \code{row.names} of \code{coefs} provide the levels of the extraneous factors.
 }
   \item{glhargs}{
-If this is a \code{list}, the object and specified contrasts are passed to the function \code{\link[multcomp]{glht}} in the \code{multcomp} package, with the contents of \code{glhargs} as additional arguments. (If you do not wish to provide additional arguments, use \code{glsargs=list()}.) If \code{glhargs} is left at \code{NULL}, or if the \code{multcomp} package is not installed, then \code{glht} is not called, and the contrast results are produced internally by \code{lsmeans}. This argument affects only the results from contrasts and not those for the lsmeans themselves. Note: If \code{glhargs} is used, the \code{adjust} argument is ignored. 
+If this is a \code{list}, the object and specified contrasts are passed to the function \code{\link[multcomp]{glht}} in the \code{multcomp} package, with the contents of \code{glhargs} as additional arguments. (If you do not wish to provide additional arguments, use \code{glsargs=list()}.) If \code{glhargs} is left at \code{NULL}, 
+%%%or if the \code{multcomp} package is not installed, 
+then \code{glht} is not called, and the contrast results are produced internally by \code{lsmeans}. This argument affects only the results from contrasts and not those for the lsmeans themselves. Note: If \code{glhargs} is used, the \code{adjust} argument is ignored. 
 If only one set of lsmeans or contrasts thereof is desired, an alternative is to call \code{glht} with an \code{lsm} call as the \code{linfct} argument.
 }
 \item{lf}{
@@ -79,6 +81,10 @@ If \code{TRUE}, the linear functions of the regression coefficients are returned
 }
 \item{linfct}{
 \code{linfct} argument for \code{\link[multcomp]{glht}}
+}
+\item{mlf}{
+   Numeric vector defining a linear function of a multivariate response (i.e., \code{y \%*\% mlf}
+   where \code{y} is the response variable of dimension \code{nresp}). The default is the mean.)
 }
   \item{\dots}{
 Additional argument(s) passed to the contrast function, or to \code{\link[multcomp]{glht}}; see Details.
@@ -190,27 +196,28 @@ lsmeans(Oatsq.lme, ~ Variety, cov.reduce = FALSE)
 
 
 # Compare with lmer result 
-require(lme4)
-Oats.lmer <- lmer(yield ~ factor(nitro) + Variety + (1 | Block/Variety), 
-                   subset = -c(1,2,3,5,8,13,21,34,55), data=Oats)
-# If pbkrtest installed, provides df, bias-adjusted SEs
-if (require(pbkrtest)) {
-  lsmeans(Oats.lmer, list(poly ~ nitro, pairwise ~ Variety))
-}
+if (require(lme4)) {
+    
+    Oats.lmer <- lmer(yield ~ factor(nitro) + Variety + (1 | Block/Variety), 
+                      subset = -c(1,2,3,5,8,13,21,34,55), data=Oats)
+    # If pbkrtest installed, provides df, bias-adjusted SEs
+    if (require(pbkrtest)) {
+        lsmeans(Oats.lmer, list(poly ~ nitro, pairwise ~ Variety))
+    }
+    
+    # Using in conjunction with 'glht' (note -- this does not use adjusted vcov)
+    # calling 'glht' from 'lsmeans' ...
+    lsmeans(Oats.lmer, pairwise ~ Variety, glhargs=list(df=9))
 
-# Using in conjunction with 'glht' (note -- this does not use adjusted vcov)
-if (require(multcomp)) {
-  # calling 'glht' from 'lsmeans' ...
-  lsmeans(Oats.lmer, pairwise ~ Variety, glhargs=list(df=9))
-  
-  # calling 'lsmeans' from 'glht' to get simultaneous CIs
-  confint(glht(Oats.lmer, linfct = lsm(~ Variety), df=9))
-}
+    # calling 'lsmeans' from 'glht' to get simultaneous CIs
+    confint(glht(Oats.lmer, linfct = lsm(~ Variety), df=9))
 
-# Custom contrasts
-lsmeans(Oats.lmer, my.own ~ Variety, 
-  contr = list(my.own = list(G.vs.M = c(1,-1,0), GM.vs.V = c(.5,.5,-1))))
-  
+    # Custom contrasts
+    lsmeans(Oats.lmer, my.own ~ Variety, 
+            contr = list(my.own = list(G.vs.M = c(1,-1,0), GM.vs.V = c(.5,.5,-1))))
+}
+    
+
 #### Examples with trends...
 # Model with interaction
 fiber.lm2 = lm(strength ~ diameter * machine, data = fiber)
