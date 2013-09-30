@@ -13,7 +13,7 @@ lsm <- function(...) {
 
 # here is S3 method for class "lsmlf" in glht
 glht.lsmlf <- function(model, linfct, ...) {
-# linfct has the arguments to pass to lsmeans. We just need to fill it out and call
+    # linfct has the arguments to pass to lsmeans. We just need to fill it out and call
     linfct$object <- model
     linfct$lf <- TRUE
     
@@ -27,3 +27,5 @@ glht.lsmlf <- function(model, linfct, ...) {
     # Just use the last result - will be linfct for lsmeans if no rhs, else for the contrasts
     glht(model, linfct = lf[[length(lf)]], ...)
 }
+
+

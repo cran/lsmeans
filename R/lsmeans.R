@@ -2,21 +2,22 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","scheffe",p.ad
                    at, trend, contr=list(), 
                    cov.reduce = function(x, name) mean(x), 
                    fac.reduce = function(coefs, lev) apply(coefs, 2, mean), 
-                   glhargs=NULL, lf = FALSE,
+                   glhargs = NULL, lf = FALSE, mlf = rep(1, nresp) / nresp,
                    ...) 
 {
     
     if (missing(specs)) stop("Must specify specs, e.g. 'pairwise ~ treatment'")
     if(!is.null(glhargs)) { # we'll pass contrasts to glht, if multcomp installed; else don't, and warn
-        if(!require("multcomp")) {
-            glhargs = NULL
-            warning("'glhargs' option disabled because 'multcomp' package not installed")
-        }
+        # Version 1.10-2 start requiring multcomp        
+        #         if(!require("multcomp")) {
+        #             glhargs = NULL
+        #             warning("'glhargs' option disabled because 'multcomp' package not installed")
+        #         }
         # force integer df since mvtnorm no longer supports fractional
+        #        else {
         # I choose to round up if it's within .2 of next integer
-        else {
-            if (!is.null(glhargs$df)) glhargs$df = as.integer(max(1, .2 + glhargs$df))
-        }
+        if (!is.null(glhargs$df)) glhargs$df = as.integer(max(1, .2 + glhargs$df))
+        #        }
     }
     
 # added 6-18-2013 - allow cov.reduce to be logical
@@ -98,6 +99,16 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","scheffe",p.ad
     # Fixed-effects covariance matrix -- Happily, vcov works the same way for lm, lme, lmer
     if(is.null(adjV)) V = vcov(object)
     else V = adjV
+    
+    # If a multivariate model, reduce to univariate model y %*% mlf
+    if (is.matrix(bhat)) {
+        nresp = ncol(bhat)
+        Iden = diag(rep(1, nrow(bhat)))
+        K = kronecker(matrix(mlf, nrow=1), Iden)
+        V = K %*% V %*% t(K)
+        bhat = bhat %*% mlf
+    }
+    
     
     # We'll work only with the non-NA elements of bhat
     used = which(!is.na(bhat))
@@ -345,13 +356,18 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","scheffe",p.ad
         combs = do.call("expand.grid", levs)
 
 ### New (version 1.10) more efficient derivation of K matrix
-        RI = plyr:::splitter_a(row.indexes, match(facs, names(baselevs)))
-    # Each entry of RI has the row indexes of X
-    # for each combination of facs (in expand.grid order)
-        K = sapply(RI, function(idx) {
-            fac.reduce(X[idx, , drop=FALSE], "")
+#         RI = plyr:::splitter_a(row.indexes, match(facs, names(baselevs)))
+#     # Each entry of RI has the row indexes of X
+#     # for each combination of facs (in expand.grid order)
+#         K = sapply(RI, function(idx) {
+#             fac.reduce(X[idx, , drop=FALSE], "")
+#         })
+# Yet newer version, more efficient, uses an exported plyr function too
+        K = alply(row.indexes, match(facs, names(baselevs)), function(idx) {
+                    fac.reduce(X[idx, , drop=FALSE], "")
         })
-                
+        K = as.matrix(as.data.frame(K))
+        
 #--- above code replaces pre-1.10 code below...
 #         # For each comb, find the needed lin. comb. of bhat to estimate
 #         # (These will end up being the COLUMNS of K)
@@ -413,7 +429,7 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","scheffe",p.ad
             results[[lsmentry]] = t(K)
         }
         else {
-            lsms = as.data.frame(t(apply(K,2,do.est)))
+            lsms = as.data.frame(t(apply(K, 2, do.est)))
             # fix-up names and get CIs
             names(lsms)[1] = effname
             # include factor levels
@@ -499,7 +515,7 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","scheffe",p.ad
             if (lf || !is.null(glhargs)) { # create linear fcn for glht
                 KK = t(sapply(Clist, function(con) {
                     nz = which(abs(con) > .0001)
-                    K[ , nz] %*% con[nz]    
+                    K[ , nz] %*% con[nz, drop = FALSE]    
                 }))
                 if (lf) {
                     dimnames(KK)[[2]] = row.names(K)
@@ -521,7 +537,7 @@ lsmeans = function(object, specs, adjust=c("auto","tukey","sidak","scheffe",p.ad
                 if (is.na(adj)) adj = no.adj
                 ctbl = as.data.frame(t(sapply(Clist, function(con) {                    
                     nz = which(abs(con) > .0001)
-                    k = K[ , nz] %*% con[nz]
+                    k = K[ , nz, drop = FALSE] %*% con[nz]
                     do.est(k)
                 })))
                 
