@@ -1,16 +1,16 @@
-fe3924fcc4ecd08228562a4b05e44b1c *DESCRIPTION
+8ded543f86fdbeccfe4a3c764469513b *DESCRIPTION
 f8b6da318ccdaa51b159964d978c7556 *NAMESPACE
 70aaa1c959e9a8e1fd24dd5e234bde28 *R/KRstuff.R
-9b75fd3aee0ace83f488ba11c251c42e *R/cld.lsm.R
+d37ab394f30ee3b743fafb0dbe6cd75f *R/cld.lsm.R
 bcb63ca960692b5491e41e2af24aaac8 *R/lsm-contr.R
 7d5075f3856f83c19cbb39598bb9404f *R/lsmeans.R
 9ec659c7bf68d8af2b1a36ccebc269fa *R/lsmip.R
 decf34a52945bb7ff4842988be241927 *R/lsmlf.R
-94dda7268f70966f62f78c27607ef68a *build/vignette.rds
 c17074ca86b94c01a90c67cb84242941 *data/autonoise.RData
 f204c1431e151e2459178e8f4fc8f0e8 *data/fiber.RData
 298a5159a77e201ffe1410cf80282eff *data/nutrition.RData
-7b4f907e650ebfc9a7e8cf14b8f5bd7e *inst/NEWS
+2ba8550824e5fc373f0aa964f68d0d47 *inst/NEWS
+c0d3e54e47050a60700f2b4686252204 *inst/doc/using-lsmeans.R
 610a58109266ba42fe1b541588098497 *inst/doc/using-lsmeans.Rnw
 81d76e8495a4948804cb4a1c9037920f *inst/doc/using-lsmeans.pdf
 09484f1ba96bd2a6f3ff7ab04cc429f5 *man/auto.noise.Rd
@@ -33,3 +33,4 @@ bcc375ec2333d134906ac5a3c6bcf059 *vignettes/using-lsmeans-oat-poly-lsmip-fig.pdf
 9c4daebbf2947b9abdc68b507fc89a4a *vignettes/using-lsmeans-warp-intplot-fig.pdf
 610a58109266ba42fe1b541588098497 *vignettes/using-lsmeans.Rnw
 73bc08f9095aa2ed263c36e0fcb9dc5f *vignettes/using-lsmeans.swv
+256f90d7039baa41a1d473a8d24054b0 *vignettes/using-lsmeans.tex
