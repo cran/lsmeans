@@ -1,9 +1,103 @@
-import(Matrix)
-importFrom(multcomp, glht)
-import(plyr)
+# Namespace for lsmeans package
 
+# Imports
+import(Matrix)
+import(methods)
+
+# 'requireNamespace' block below allows me to put multcomp in
+# Imports instead of Depends. 
+if (requireNamespace("multcomp", quietly = TRUE)) {
+    importFrom(multcomp, cld, glht, modelparm)
+    
+    #S3method(cld, lsmobj) # Appears later outside this block
+    S3method(glht, lsmlf)
+    S3method(glht, lsmobj)
+    S3method(modelparm, lsmwrap)
+}
+
+# Gotta have the generic for cld, whether or not multcomp is attacjed
+    export(cld)
+
+if (requireNamespace("plyr", quietly = TRUE)) {
+    importFrom(plyr, alply)
+}
+
+# Visible exports
+exportPattern("*.lsmc")  #all contrast fcns
+export(
+    as.glht,
+    contrast,
+    lsm,
+    lsm.basis,
+    lsmeans, 
+    lsmeans.character,  # because it is a generic
+    lsmip,
+    lstrends,
+    nonest.basis,
+    recover.data,
+    ref.grid,
+    test
+)    
+
+
+# S3 methods - 
+# For clarity, I'm showing them all 
+# but commenting out the ones used only interally
+
+S3method(as.glht, lsmobj)
+
+S3method(cld, lsmobj)
+
+S3method(confint, lsmobj)
+
+S3method(contrast, lsmobj)
+
+#S3method(glht, lsmlf)   # in namespace block above
+#S3method(glht, lsmobj)
+
+#S3method(lsm.basis, gls)
+#S3method(lsm.basis, lm)
+#S3method(lsm.basis, lme)
+#S3method(lsm.basis, mer)
+#S3method(lsm.basis, merMod)
+#S3method(lsm.basis, mlm)
+
+S3method(lsmeans, character)
+S3method(lsmeans.character, default)
+S3method(lsmeans.character, ref.grid)
+S3method(lsmeans, default)
+S3method(lsmeans, formula)
+S3method(lsmeans, list)
+
+S3method(lsmip, default)
+
+#S3method(modelparm, lsmwrap) # in namespace block above
+
+S3method(pairs, lsmobj)
+
+S3method(predict, ref.grid)
+
+S3method(print, ref.grid)
+S3method(print, summary.ref.grid)
+S3method(print, lsm.list)
+
+S3method(recover.data, call)
+#S3method(recover.data, default)
+#S3method(recover.data, gls)
+#S3method(recover.data, lm)
+#S3method(recover.data, mer)
+#S3method(recover.data, merMod)
+
+S3method(str, ref.grid)
+
+S3method(summary, ref.grid)
+S3method(summary, glht.list)
+S3method(summary, lsm.list)
+
+S3method(test, lsmobj)
+
+
+# interim support for .old.lsmeans
+export(.old.lsmeans)
 S3method(print, lsm)
 S3method(print, data.frame.lsm)
-S3method(glht, lsmlf)
-
-exportPattern("^[[:alpha:]]+")

@@ -12,9 +12,9 @@ It is used as a case study in Milliken and Johnson, Chapter 17, p.202. (You may 
 \format{
   A data frame with 107 observations on the following 4 variables.
   \describe{
-    \item{\code{age}}{a factor with levels \code{1} \code{2} \code{3} \code{4}. Mother's age group.}
-    \item{\code{group}}{a factor with levels \code{FoodStamps} \code{NoAid}. Whether or not the family receives food stamp assistance.}
-    \item{\code{race}}{a factor with levels \code{Black} \code{Hispanic} \code{White}. Mother's race.}
+    \item{\code{age}}{a factor with levels \code{1}, \code{2}, \code{3}, \code{4}. Mother's age group.}
+    \item{\code{group}}{a factor with levels \code{FoodStamps}, \code{NoAid}. Whether or not the family receives food stamp assistance.}
+    \item{\code{race}}{a factor with levels \code{Black}, \code{Hispanic}, \code{White}. Mother's race.}
     \item{\code{gain}}{a numeric vector (the response variable). Gain score (posttest minus pretest) on knowledge of nutrition.}
   }
 }
@@ -31,12 +31,13 @@ require(lsmeans)
 nutr.aov <- aov(gain ~ (group + age + race)^2, data = nutrition)
 
 # Summarize predictions for age group 3
-nutr.lsm <- lsmeans(nutr.aov, list(pairwise ~ group|race, pairwise ~ race|group),
-                   at = list(age="3"))
+nutr.lsm <- lsmeans(nutr.aov, ~ race * group, 
+                at = list(age="3"))
                    
-with(nutr.lsm[[1]], interaction.plot(group, race, lsmean, type="b"))
+lsmip(nutr.lsm, race ~ group)
 
 # Hispanics seem exceptional; but, this doesn't test out due to very sparse data
-print(nutr.lsm, omit=3)
+cld(nutr.lsm, by = "group")
+cld(nutr.lsm, by = "race")
 }
 \keyword{datasets}
