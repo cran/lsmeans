@@ -76,8 +76,10 @@ recover.data.call <- function(object, trms, na.action, data, ...) {
     vars <- all.vars(trms)
     tbl = data
     if (is.null(tbl)) {
-        m <- match(c("formula", "data", "subset", "weights", 
-                     "na.action", "offset"), names(fcall), 0L)
+#         m <- match(c("formula", "data", "subset", "weights", 
+#                      "na.action", "offset"), names(fcall), 0L)
+# I think we don't need to match some of these just to recover the data        
+        m <- match(c("formula", "data", "subset"), names(fcall), 0L)
         fcall <- fcall[c(1L, m)]
         fcall$drop.unused.levels <- TRUE
         fcall[[1L]] <- as.name("model.frame")
@@ -186,8 +188,12 @@ lsm.basis.merMod <- function(object, trms, xlev, grid) {
     V = as.matrix(vcov(object))
     dfargs = misc = list()
     if (isLMM(object)) {
+        ##- if (requireNamespace("pbkrtest")) {
         if (require("pbkrtest")) {
-            dfargs = list(unadjV = V, adjV = vcovAdj(object, 0))
+            ##- attach(getNamespace("pbkrtest"), pos = 2, name = "pbkr.ns", warn.conflicts = FALSE)
+            ##- on.exit(detach("pbkr.ns"))
+            dfargs = list(unadjV = V, 
+                adjV = vcovAdj(object, 0))
             V = as.matrix(dfargs$adjV)
             dffun = function(k, dfargs) .KRdf.mer (dfargs$adjV, dfargs$unadjV, k)
         }

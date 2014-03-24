@@ -1,5 +1,20 @@
 Changelog for 'lsmeans' package
 
+2.00-4
+    Reverted to code that just loads pbkrtest and its required 
+(but unneeded) packages when pbkrtest is needed
+
+2.00-3
+    Slight change in use of attach() in lsm.basis.merMod
+
+2.00-2
+    Added some support for adjusted confidence limits
+    Minor bug fix to make recover.data work with more gls models
+    Fewer unneeded packages are loaded
+
+2.00-1
+    Fixed a minor formatting issue in a vignette
+
 2.00-0
     This is a major redesign of the package. Single function 'lsmeans'
     is replaced by methods for different types of models and 
