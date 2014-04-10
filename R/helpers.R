@@ -104,7 +104,6 @@ recover.data.call <- function(object, trms, na.action, data, ...) {
     else
         fcall$data = tbl[complete.cases(data), , drop=FALSE]
     
-    
     attr(tbl, "call") = object # the original call
     attr(tbl, "terms") = trms
     attr(tbl, "predictors") = all.vars(delete.response(trms))
@@ -188,12 +187,9 @@ lsm.basis.merMod <- function(object, trms, xlev, grid) {
     V = as.matrix(vcov(object))
     dfargs = misc = list()
     if (isLMM(object)) {
-        ##- if (requireNamespace("pbkrtest")) {
-        if (require("pbkrtest")) {
-            ##- attach(getNamespace("pbkrtest"), pos = 2, name = "pbkr.ns", warn.conflicts = FALSE)
-            ##- on.exit(detach("pbkr.ns"))
+        if (requireNamespace("pbkrtest")) {
             dfargs = list(unadjV = V, 
-                adjV = vcovAdj(object, 0))
+                adjV = pbkrtest::vcovAdj.lmerMod(object, 0))
             V = as.matrix(dfargs$adjV)
             dffun = function(k, dfargs) .KRdf.mer (dfargs$adjV, dfargs$unadjV, k)
         }
@@ -227,6 +223,8 @@ lsm.basis.merMod <- function(object, trms, xlev, grid) {
 recover.data.mer <- recover.data.merMod
 
 lsm.basis.mer <- lsm.basis.merMod
+# Seems OK just now (Apr 2014), as vcovAdj methods are identical
+# but I haven't tested this
 
 
 

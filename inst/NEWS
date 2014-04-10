@@ -1,8 +1,24 @@
 Changelog for 'lsmeans' package
 
+2.00-5
+    Additional message showing what factors have been averaged over
+    Now adds offsets to predictions when model contains
+        offset() terms (but not for an 'offset' argument)
+    New 'update' method for "ref.grid" objects
+    Broader support for transformations (see ?update.ref.grid)
+    Changed all S3 methods for "lsmobj", except 'show', to S3
+        methods for the "ref.grid" class, since they all work
+        just fine for this class as well.
+    Added an example for 'lstrends'
+    Removed unneeded misc$ylevs element in ref.grid objects
+    New way to bypass unneeded package-loading from pbkrtest
+    Added an example for lstrends as there wasn't one
+    Fixed minor bug in summary() - a try() call should have been 
+        with silent=TRUE
+
 2.00-4
     Reverted to code that just loads pbkrtest and its required 
-(but unneeded) packages when pbkrtest is needed
+        (but unneeded) packages when pbkrtest is needed
 
 2.00-3
     Slight change in use of attach() in lsm.basis.merMod

@@ -17,10 +17,12 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.levs, data) {
     else # attach needed attributes to given data
         data = recover.data(object, data = data)
     
+    trms = attr(data, "terms")
+    
     # find out if any variables are coerced to factors
     ### OLD VERSION: anm = all.names(attr(data, "terms"))    
     ###              coerced = anm[1 + grep("factor|ordered", anm)]
-    coerced = .find.coerced(attr(data, "terms"), data)
+    coerced = .find.coerced(trms, data)
     
     # convenience functions
     sort.unique = function(x) sort(unique(x))
@@ -89,9 +91,10 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.levs, data) {
     for (nm in names(matlevs))
         grid[[nm]] = matrix(rep(matlevs[[nm]], each=nrow(grid)), nrow=nrow(grid))
 
-    basis = lsm.basis(object, attr(data, "terms"), xlev, grid)
+    basis = lsm.basis(object, trms, xlev, grid)
     
     misc = basis$misc
+    
     form = attr(data, "call")$formula
     if (is.null(misc$tran) && (length(form) > 2)) { # No link fcn, but response may be transformed
         lhs = form[[2]]
@@ -151,17 +154,26 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.levs, data) {
         basis$X = basis$X[incl.flags, , drop=FALSE]
     }
 
+    # Any offsets???
+    if (!is.null(off.idx <- attr(trms, "offset"))) {
+        offset = rep(0, nrow(grid))
+        tvars = attr(trms, "variables")
+        for (i in off.idx)
+            offset = offset + eval(tvars[[i+1]], grid)
+        grid[[".offset."]] = offset
+    }
 
-    ### using result from basis instead. misc = list()
+    misc$ylevs = NULL # No longer needed
     misc$estName = "prediction"
     misc$infer = c(FALSE,FALSE)
     misc$level = .95
     misc$adjust = "none"
     misc$famSize = nrow(grid)
+    misc$avgd.over = character(0)
 
     
     new ("ref.grid",
-         model.info = list(call = attr(data,"call"), terms = attr(data, "terms"), xlev = xlev),
+         model.info = list(call = attr(data,"call"), terms = trms, xlev = xlev),
          roles = list(predictors = attr(data, "predictors"), 
                       responses = attr(data, "responses"), 
                       multresp = multresp),
@@ -229,9 +241,13 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.levs, data) {
     result = as.data.frame(t(result))
     names(result) = c(misc$estName, "SE", "df")
     if (!is.null(misc$tran) && (misc$tran != "none")) {
-        link = try(make.link(misc$tran))
-        if (!inherits(link, "try-error"))
-            attr(result, "link") = link
+        if(is.character(misc$tran)) {
+            link = try(make.link(misc$tran), silent=TRUE)
+            if (!inherits(link, "try-error"))
+                attr(result, "link") = link
+        }
+        else if (is.list(misc$tran))
+            attr(result, "link") = misc$tran
     }
     result
 }
@@ -266,6 +282,10 @@ str.ref.grid <- function(object, ...) {
         else
             showlevs(levs[[nm]])
         cat("\n")
+    }
+    if(!is.null(tran <- object@misc$tran)) {
+        if (is.list(tran)) tran = "custom - see slot(, \"misc\")$tran"
+        cat(paste("Transformation:", dQuote(tran), "\n"))
     }
 }
 
@@ -352,6 +372,8 @@ predict.ref.grid <- function(object, type = c("link","response","lp","linear"), 
     type <- match.arg(type)
     pred = .est.se.df(object@linfct, object@bhat, object@nbasis, object@V, object@dffun, object@dfargs, object@misc, do.se=FALSE)
     result = pred[[1]]
+    if (".offset." %in% names(object@grid))
+        result = result + object@grid[[".offset."]]
     if (type == "response") {
         link = attr(pred, "link")
         if (!is.null(link))
@@ -366,6 +388,11 @@ summary.ref.grid <- function(object, infer, level, adjust, by,
     result = .est.se.df(object@linfct, object@bhat, object@nbasis, object@V, object@dffun, object@dfargs, object@misc)
     
     lblnms = setdiff(names(object@grid), object@roles$responses)
+    
+    if(".offset." %in% lblnms) {
+        result[[1]] = result[[1]] + object@grid[[".offset."]]
+        lblnms = setdiff(lblnms, ".offset.")
+    }
     lbls = object@grid[lblnms]
 
     zFlag = (all(is.na(result$df)))
@@ -433,6 +460,10 @@ summary.ref.grid <- function(object, infer, level, adjust, by,
         result[["SE"]] = link$mu.eta(result[[1]]) * result[["SE"]]
         result[[1]] = link$linkinv(result[[1]])
     }
+    
+    if (length(object@misc$avgd.over) > 0)
+        mesg = c(paste("Results are averaged over the levels of:",
+                 paste(object@misc$avgd.over, collapse = ", ")), mesg)
 
     summ = cbind(lbls, result)
     attr(summ, "pri.vars") = setdiff(union(object@misc$pri.vars, object@misc$by.vars), by)
@@ -501,6 +532,25 @@ print.summary.ref.grid = function(x, ..., digits=NULL, quote=FALSE, right=TRUE) 
 
 print.ref.grid = function(x,...)
     print(summary.ref.grid(x, ...))
+
+
+# Method to alter contents of misc slot
+update.ref.grid = function(object, ...) {
+    args = list(...)
+    valid.choices = c("adjust","avgd.over","by.vars","estName","famSize","infer","inv.lbl",
+        "level","methdesc","pri.vars","tran")
+    misc = object@misc
+    for (nm in names(args)) {
+        fullname = try(match.arg(nm, valid.choices), silent=TRUE)
+        if(inherits(fullname, "try-error"))
+            message("Argument ", sQuote(nm), " was ignored. Valid choices are:\n",
+                    paste(valid.choices, collapse=", "))
+            misc[[fullname]] = args[[nm]]
+    }
+    object@misc = misc
+    object
+}
+
 
 ### S4 methods
 ## use S3 for this setMethod("summary", "ref.grid", summary.ref.grid)

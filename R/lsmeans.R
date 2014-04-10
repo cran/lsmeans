@@ -147,12 +147,25 @@ lsmeans.character.ref.grid = function(object, specs, by = NULL,
     K = plyr::alply(row.idx, match(facs, names(RG@levels)), function(idx) {
         fac.reduce(RG@linfct[idx, , drop=FALSE])
     })
-    
+        
     linfct = t(as.matrix(as.data.frame(K)))
     row.names(linfct) = NULL
     
     if(.some.term.contains(union(facs, RG@roles$trend), RG@model.info$terms))
         message("NOTE: Results may be misleading due to involvement in interactions")
+    
+    # Figure offset, if any
+    if (".offset." %in% names(RG@grid)) {
+        offset = plyr::alply(row.idx, match(facs, names(RG@levels)), function(idx) {
+            fac.reduce(RG@grid[idx, ".offset.", drop=FALSE])
+        })
+        combs[[".offset."]] = unlist(offset)
+    }
+    
+    # Figure out which factors have been averaged over
+    nlev = sapply(RG@levels, length)
+    avgd.over = setdiff(names(nlev[nlev > 1]), facs)
+    
     
     RG@roles$responses = character()
     RG@misc$famSize = nrow(linfct)
@@ -161,6 +174,7 @@ lsmeans.character.ref.grid = function(object, specs, by = NULL,
     RG@misc$infer = c(TRUE,FALSE)
     RG@misc$pri.vars = setdiff(facs, by)
     RG@misc$by.vars = by
+    RG@misc$avgd.over = union(RG@misc$avgd.over, avgd.over)
     RG@misc$methDesc = "lsmeans"
     RG@roles$predictors = names(levs)
     result = new("lsmobj", RG, linfct = linfct, levels = levs, grid = combs)
@@ -202,8 +216,9 @@ print.lsm.list <- function(x, ...)
 contrast = function(object, ...)
     UseMethod("contrast")
               
-contrast.lsmobj = function(object, method = "eff", by, adjust, ...) {
+contrast.ref.grid = function(object, method = "eff", by, adjust, ...) {
     args = object@grid
+    args[[".offset."]] = NULL # ignore the offset in labels, etc.
     if(missing(by)) 
         by = object@misc$by.vars
     if (!is.null(by)) {
@@ -241,6 +256,8 @@ contrast.lsmobj = function(object, method = "eff", by, adjust, ...) {
     if (is.null(by)) {
         linfct = t(cmat) %*% object@linfct
         grid = data.frame(.contrast.=names(cmat))
+        if (".offset." %in% names(object@grid))
+            grid[[".offset."]] = t(cmat) %*% object@grid[[".offset."]]
     }
     
     # NOTE: The kronecker thing here is nice and efficient but depends
@@ -258,6 +275,8 @@ contrast.lsmobj = function(object, method = "eff", by, adjust, ...) {
         for (v in by)
             xlevs[[v]] = rep(bylevs[row.1st, v], each=n.each)
         grid = cbind(grid, as.data.frame(xlevs))
+        if (".offset." %in% names(object@grid))
+            grid[[".offset."]] = tcmat %*% object@grid[unlist(by.rows), ".offset."]
     }
     
     # Rename the .contrast. column -- ordinarily to "contrast",
@@ -284,7 +303,7 @@ contrast.lsmobj = function(object, method = "eff", by, adjust, ...) {
         # anything other than (-1,0,1)?
         non.comp = setdiff(zapsmall(unique(as.matrix(cmat))), c(-1,0,1)) 
         if(length(non.comp) == 0 && (misc$tran %in% c("log", "logit"))) {
-            misc$orig.inv.label = misc$inv.label
+            misc$orig.inv.lbl = misc$inv.lbl
             misc$inv.lbl = ifelse(misc$tran == "logit", "odds.ratio", 
                                   paste(misc$inv.lbl,"ratio",sep="."))
             misc$tran = "log"
@@ -295,7 +314,7 @@ contrast.lsmobj = function(object, method = "eff", by, adjust, ...) {
     
     object@roles$predictors = "contrast"
     levels = list()
-    for (nm in names(grid))
+    for (nm in setdiff(names(grid), ".offset."))
         levels[[nm]] = unique(grid[[nm]])
         
     new("lsmobj", object, linfct=linfct, levels=levels, grid=grid, misc=misc)
@@ -314,7 +333,7 @@ contrast.lsmobj = function(object, method = "eff", by, adjust, ...) {
 
 
 # confint method
-confint.lsmobj = function(object, parm, level=.95, ...) {
+confint.ref.grid = function(object, parm, level=.95, ...) {
     summary(object, infer=c(TRUE,FALSE), level=level, ...)
 }
 
@@ -322,12 +341,12 @@ confint.lsmobj = function(object, parm, level=.95, ...) {
 test = function(object, parm, ...) {
     UseMethod("test")
 }
-test.lsmobj = function(object, parm, ...) {
+test.ref.grid = function(object, parm, ...) {
     summary(object, infer=c(FALSE,TRUE), ...)
 }
 
 # pairs method
-pairs.lsmobj = function(x, ...) {
+pairs.ref.grid = function(x, ...) {
     object = x # for my sanity
     contrast(object, method = "pairwise", ...)
 }
