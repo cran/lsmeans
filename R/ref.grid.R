@@ -7,7 +7,8 @@
 #     TRUE - same as mean
 #     FALSE - same as function(x) sort(unique(x))
 
-ref.grid <- function(object, at, cov.reduce = mean, mult.levs, data) {
+ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs, 
+                     options = getOption("lsmeans")$ref.grid, data) {
     # recover the data
     if (missing(data)) {
         data = try(recover.data (object, data = NULL))
@@ -98,18 +99,20 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.levs, data) {
     form = attr(data, "call")$formula
     if (is.null(misc$tran) && (length(form) > 2)) { # No link fcn, but response may be transformed
         lhs = form[[2]]
-        tran = setdiff(all.names(lhs), c(all.vars(lhs), "~"))
+        tran = setdiff(all.names(lhs), c(all.vars(lhs), "~", "cbind"))
         if(length(tran) == 1)
             misc$tran = tran
     }
     
     # Take care of multivariate response
-    multresp = list()
+    multresp = character(0) ### ??? was list()
     ylevs = misc$ylevs
     if(!is.null(ylevs)) { # have a multivariate situation
         if (missing(mult.levs)) {
-            yname = multresp = names(ylevs)[1]
-            ref.levels[[yname]] = ylevs[[1]]
+            if (missing(mult.name))
+                mult.name = names(ylevs)[1]
+            ref.levels[[mult.name]] = ylevs[[1]]
+            multresp = mult.name
         }
         else {
             k = prod(sapply(mult.levs, length))
@@ -172,7 +175,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.levs, data) {
     misc$avgd.over = character(0)
 
     
-    new ("ref.grid",
+    result = new ("ref.grid",
          model.info = list(call = attr(data,"call"), terms = trms, xlev = xlev),
          roles = list(predictors = attr(data, "predictors"), 
                       responses = attr(data, "responses"), 
@@ -180,6 +183,13 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.levs, data) {
          grid = grid, levels = ref.levels, matlevs = matlevs,
          linfct = basis$X, bhat = basis$bhat, nbasis = basis$nbasis, V = basis$V,
          dffun = basis$dffun, dfargs = basis$dfargs, misc = misc)
+
+    if(!is.null(options)) {
+        options$object = result
+        result = do.call("update.ref.grid", options)
+    }
+
+    result
 }
 
 # This function figures out which covariates in a model 
@@ -215,16 +225,22 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.levs, data) {
 # utility fcn to get est's, std errors, and df
 # new arg: do.se -- if FALSE, just do the estimates and return 0 for se and df
 # returns a data.frame with an add'l "link" attribute if misc$tran is non-null
-.est.se.df = function(linfct, bhat, nbasis, V, dffun, dfargs, misc, do.se=TRUE) {
+.est.se.df = function(linfct, bhat, nbasis, V, dffun, dfargs, misc, do.se=TRUE, 
+                      tol=getOption("lsmeans")$estble.tol) {
     active = which(!is.na(bhat))
     bhat = bhat[active]
+    if (is.null(tol)) 
+        tol = 1e-8
     result = apply(linfct, 1, function(x) {
         estble = if(is.na(nbasis[1]))
             TRUE
         else {
             chk = t(nbasis) %*% x
+            ssqx = sum(x*x) # BEFORE subsetting x
+            # If x really small, don't scale chk'chk
+            if (ssqx < tol) ssqx = 1
             x = x[active]
-            all(abs(chk) <= 1e-6)      
+            sum(chk*chk) < tol * ssqx
         }
         if (estble) {
             est = sum(bhat * x)
@@ -260,7 +276,7 @@ str.ref.grid <- function(object, ...) {
     #cat("responses: ")
     #showlevs(object@roles$responses)
     levs = object@levels
-    cat("'ref.grid' object with variables:\n")
+    cat(paste("'", class(object)[1], "' object with variables:\n", sep=""))
     for (nm in union(object@roles$predictors, union(object@roles$multresp, object@roles$responses))) {
         cat(paste("    ", nm, " = ", sep = ""))
         if (nm %in% names(object@matlevs)) {
@@ -361,7 +377,7 @@ str.ref.grid <- function(object, ...) {
         none = -qt((1-level)/2, df),
         sidak = -qt((1 - level^(1/n.contr))/2, df),
         bonferroni = -qt((1-level)/n.contr/2, df),
-        tukey = qtukey(level, fam.size, df)
+        tukey = qtukey(level, fam.size, df) / sqrt(2)
     )
     list(cv = cv, mesg = mesg, adjust = adjust)
 }
@@ -468,7 +484,7 @@ summary.ref.grid <- function(object, infer, level, adjust, by,
     summ = cbind(lbls, result)
     attr(summ, "pri.vars") = setdiff(union(object@misc$pri.vars, object@misc$by.vars), by)
     attr(summ, "by.vars") = by
-    attr(summ, "mesg") = mesg
+    attr(summ, "mesg") = unique(mesg)
     class(summ) = c("summary.ref.grid", "data.frame")
     summ
 }
@@ -522,7 +538,7 @@ print.summary.ref.grid = function(x, ..., digits=NULL, quote=FALSE, right=TRUE) 
         }
     }
     
-    msg = attr(x, "mesg")
+    msg = unique(attr(x, "mesg"))
     if (!is.null(msg))
         for (j in seq_len(length(msg))) cat(paste(msg[j], "\n"))
     
@@ -545,10 +561,23 @@ update.ref.grid = function(object, ...) {
         if(inherits(fullname, "try-error"))
             message("Argument ", sQuote(nm), " was ignored. Valid choices are:\n",
                     paste(valid.choices, collapse=", "))
+        else {
             misc[[fullname]] = args[[nm]]
+        }
     }
     object@misc = misc
     object
+}
+
+### set or change lsmeans options
+lsm.options = function(...) {
+    opts = getOption("lsmeans")
+    if (is.null(opts)) opts = list()
+    newopts = list(...)
+    for (nm in names(newopts))
+        opts[[nm]] = newopts[[nm]]
+    options(lsmeans = opts)
+    invisible(opts)
 }
 
 

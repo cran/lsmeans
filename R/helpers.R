@@ -120,9 +120,8 @@ recover.data.lm <- function(object, ...) {
 }
 
 lsm.basis.lm <- function(object, trms, xlev, grid) {
-    contrasts = attr(model.matrix(object), "contrasts")
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
-    X = model.matrix(trms, m, contrasts.arg = contrasts)
+    X = model.matrix(trms, m, contrasts.arg = object$contrasts)
     # coef() works right for lm but coef.aov tosses out NAs
     bhat = as.numeric(object$coefficients) 
     # stretches it out if multivariate - see mlm method
@@ -182,8 +181,6 @@ recover.data.merMod <- function(object, ...) {
 }
 
 lsm.basis.merMod <- function(object, trms, xlev, grid) {
-    bhat = fixef(object)
-    contrasts = attr(model.matrix(object), "contrasts")
     V = as.matrix(vcov(object))
     dfargs = misc = list()
     if (isLMM(object)) {
@@ -211,9 +208,27 @@ lsm.basis.merMod <- function(object, trms, xlev, grid) {
     else 
         stop("Can't handle a nonlinear mixed model")
     
+    contrasts = attr(object@pp$X, "contrasts")
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = contrasts)
-    list(X=X, bhat=bhat, nbasis=matrix(NA), V=V, dffun=dffun, dfargs=dfargs, misc=misc)
+    bhat = fixef(object)
+    
+    if (length(bhat) < ncol(X)) {
+        # Newer versions of lmer can handle rank deficiency, but we need to do a couple of
+        # backflips to put the pieces together right,
+        # First, figure out which columns were retained
+        kept = match(names(bhat), dimnames(X)[[2]])
+        # Now re-do bhat with NAs in the right places
+        bhat = NA * X[1, ]
+        bhat[kept] = fixef(object)
+        # we have to reconstruct the model matrix
+        modmat = model.matrix(trms, object@frame, contrasts.arg=contrasts)
+        nbasis = nonest.basis(modmat)
+    }
+    else
+        nbasis=matrix(NA)
+    
+    list(X=X, bhat=bhat, nbasis=nbasis, V=V, dffun=dffun, dfargs=dfargs, misc=misc)
 }
 
 
@@ -373,24 +388,24 @@ lsm.basis.coxme <- function(object, trms, xlev, grid) {
 #--------------------------------------------------------------
 #--------------------------------------------------------------
 #--------------------------------------------------------------
-### Public utility to use for obtaining a basis nor nonestimable functions
-# Call with its QR decomp (LAPACK=FALSE!), if available
+### Public utility to use for obtaining an orthonormal basis nor nonestimable functions
+# Call with its QR decomp (LAPACK=FALSE), if available
 nonest.basis <- function(qrX) {
     if (!is.qr(qrX))
         qrX = qr(qrX, LAPACK=FALSE)
     rank = qrX$rank
     tR = t(qr.R(qrX))
-    if (rank == nrow(tR))
+    p = nrow(tR)
+    if (rank == p)
         return (matrix(NA))
     # null space of X is same as null space of R in QR decomp
-    if (ncol(tR) < nrow(tR)) # add columns if not square
-        tR = cbind(tR, matrix(0, nrow=nrow(tR), ncol=nrow(tR)-ncol(tR)))
+    if (ncol(tR) < p) # add columns if not square
+        tR = cbind(tR, matrix(0, nrow=p, ncol=p-ncol(tR)))
     # last few rows are zero -- add a diagonal
     for (i in (rank+1):nrow(tR)) 
         tR[i,i] = 1
-    nbasis = qr.resid(qr(tR[, seq_len(rank)]), tR[, -seq_len(rank)])
-    if (!is.matrix(nbasis)) 
-        nbasis = matrix(nbasis, ncol=1)
+    # nbasis is last p - rank cols of Q in QR decomp of tR
+    nbasis = qr.Q(qr(tR))[ , -(1:rank), drop = FALSE]
     # permute the rows via pivot
     nbasis[qrX$pivot, ] = nbasis
     nbasis
