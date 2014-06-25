@@ -199,16 +199,6 @@ lsmeans.character.ref.grid = function(object, specs, by = NULL,
 }
 
 
-# Summary method for an lsm.list
-summary.lsm.list <- function(object, ...)
-    lapply(object, function(x) {
-        if (inherits(x, "summary.ref.grid"))  x
-        else summary(x, ...)
-    })
-
-print.lsm.list <- function(x, ...) 
-    print(summary(x, ...))
-
 
 # utility to parse 'by' part of a formula
 .find.by = function(rhs) {
@@ -332,6 +322,7 @@ contrast.ref.grid = function(object, method = "eff", by, adjust,
     result
 }
 
+
 # return list of row indexes in tbl for each combination of by
 # tbl should be a data.frame
 .find.by.rows = function(tbl, by) {
@@ -362,6 +353,7 @@ pairs.ref.grid = function(x, ...) {
     object = x # for my sanity
     contrast(object, method = "pairwise", ...)
 }
+
 
 
 ### lstrends function

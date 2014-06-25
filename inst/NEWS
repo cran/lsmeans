@@ -1,12 +1,22 @@
 Changelog for 'lsmeans' package
 
+2.10
+    Support for 'aovlist' objects (does intra-block analysis)
+        To use, avoid contr.treatment; use contr.sum or other that sums to 0
+    Added 'contrast', 'test', 'pairs', 'confint', 'cld' methods for
+        lsmlist, with 'which' argument defaulting to 1
+    Added 'disable.pbkrtest' option (via lsm.options) if you don't want
+        bias correction and K-R degrees of freedom with lmerMod objects
+    Added 'df' argument to 'ref.grid' constructor, also 'summary' and 
+        'update'.
+
 2.05
     Corrected error in Tukey-adjusted confidence intervals
     New dataset 'oranges'
     Completely revised, improved vignette 'using-lsmeans'
     New vignette 'extending lsmeans'
     New 'mult.name' argument in 'ref.grid'
-    New 'lsmeans.options' function and associated support for 
+    New 'lsm.options' function and associated support for 
         setting display defaults for various objects
     Improved estimability checking and ability to set the 
         tolerance via lsmeans.options(estble.tol = ...)
