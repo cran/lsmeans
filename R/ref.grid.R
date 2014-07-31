@@ -8,7 +8,7 @@
 #     FALSE - same as function(x) sort(unique(x))
 
 ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs, 
-                     options = getOption("lsmeans")$ref.grid, df, data) {
+                     options = lsm.options()$ref.grid, data) {
     # recover the data
     if (missing(data)) {
         data = try(recover.data (object, data = NULL))
@@ -18,6 +18,10 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     else # attach needed attributes to given data
         data = recover.data(object, data = data)
     
+    if(is.character(data)) # 'data' is in fact an error message
+        stop(data)
+        
+    
     trms = attr(data, "terms")
     
     # find out if any variables are coerced to factors
@@ -25,11 +29,40 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     ###              coerced = anm[1 + grep("factor|ordered", anm)]
     coerced = .find.coerced(trms, data)
     
-    # convenience functions
+    # convenience function
     sort.unique = function(x) sort(unique(x))
-    if(is.logical(cov.reduce)) 
-        if(cov.reduce[1]) cov.reduce = mean
-        else              cov.reduce = sort.unique
+    
+    # Ensure cov.reduce is a function or list thereof
+    dep.x = list() # list of formulas to fit later
+    fix.cr = function(cvr) {
+        # cvr is TRUE or FALSE
+        if(is.logical(cvr)) 
+            if(cvr[1]) cvr = mean
+        else              cvr = sort.unique
+        else if (inherits(cvr, "formula")) {
+            if (length(cvr) < 3)
+                stop("Formulas in 'cov.reduce' must be two-sided")
+            lhs = all.vars(cvr)[1]
+            dep.x[[lhs]] <<- cvr
+            cvr = mean 
+        }
+        else if (!inherits(cvr, c("function","list")))
+            stop("Invalid 'cov.reduce' argument")
+        cvr
+    }
+    
+    # IMPORTANT: following stmts may also affect x.dep
+    if (is.list(cov.reduce))
+        cov.reduce = lapply(cov.reduce, fix.cr)
+    else
+        cov.reduce = fix.cr(cov.reduce)
+    
+    # zap any formulas that are also in 'at'
+    if (!missing(at))
+        for (xnm in names(at)) dep.x[[xnm]] = NULL
+    
+    
+    # local cov.reduce function that works with function or named list
     cr = function(x, nm) {
         if (is.function(cov.reduce))
             cov.reduce(x)
@@ -88,10 +121,20 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     
     # Now create the reference grid
     grid = do.call(expand.grid, ref.levels)
+    
     # add any matrices
     for (nm in names(matlevs))
         grid[[nm]] = matrix(rep(matlevs[[nm]], each=nrow(grid)), nrow=nrow(grid))
 
+    # resolve any covariate formulas
+    for (xnm in names(dep.x)) {
+        if (!all(all.vars(dep.x[[xnm]]) %in% names(grid)))
+            stop("Formulas in 'cov.reduce' must predict covariates actually in the model")
+        xmod = lm(dep.x[[xnm]], data = data)
+        grid[[xnm]] = predict(xmod, newdata = grid)
+        ref.levels[[xnm]] = NULL
+    }
+    
     basis = lsm.basis(object, trms, xlev, grid)
     
     misc = basis$misc
@@ -166,6 +209,20 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
         grid[[".offset."]] = offset
     }
 
+    ### --- Determine frequencies --- (added ver.2.11)
+    nms = union(names(xlev), coerced) # only factors, no covariates or mult.resp
+    # originally, I used 'plyr::count', but there are probs when there is a 'freq' variable
+    id = plyr::id(data[, nms, drop = FALSE], drop = TRUE)
+    uid = !duplicated(id)
+    key = do.call(paste, data[uid, nms, drop = FALSE])
+    key = key[order(id[uid])]
+    frq = tabulate(id, attr(id, "n"))
+    tgt = do.call(paste, grid[, nms, drop = FALSE])
+    freq = rep(0, nrow(grid))
+    for (i in seq_along(key))
+        freq[tgt == key[i]] = frq[i] ###ftbl[i, "freq"]
+    grid[[".freq."]] = freq
+
     misc$ylevs = NULL # No longer needed
     misc$estName = "prediction"
     misc$infer = c(FALSE,FALSE)
@@ -173,8 +230,6 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     misc$adjust = "none"
     misc$famSize = nrow(grid)
     misc$avgd.over = character(0)
-    if(!missing(df)) misc$df = df
-
     
     result = new ("ref.grid",
          model.info = list(call = attr(data,"call"), terms = trms, xlev = xlev),
@@ -192,6 +247,12 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
 
     result
 }
+
+
+#### End of ref.grid ------------------------------------------
+
+
+
 
 # This function figures out which covariates in a model 
 # have been coerced to factors. Does NOT rely on the names of
@@ -223,14 +284,26 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     intersect(unique(unlist(cvars)), covs.d)
 }
 
-# Matrix times vector function that ignores NAs, NaNs, Infs
-# when given weight 0
-.mat.times.vec = function(X, y) {
+
+# Computes the quadratic form y'Xy after subsetting for the nonzero elements of y
+.qf.non0 = function(X, y) {
     ii = (zapsmall(y) != 0)
-    result = rep(0, length(y))
     if (any(ii))
-        result[ii] = X[ii, ii, drop = FALSE] %*% y[ii]
-    result
+        sum(y[ii] * (X[ii, ii, drop = FALSE] %*% y[ii]))
+    else 0
+}
+
+# utility to check estimability of x'beta, given nonest.basis
+.is.estble = function(x, nbasis, tol) {
+    if(is.na(nbasis[1]))
+        TRUE
+    else {
+        chk = as.numeric(crossprod(nbasis, x))
+        ssqx = sum(x*x) # BEFORE subsetting x
+        # If x really small, don't scale chk'chk
+        if (ssqx < tol) ssqx = 1
+        sum(chk*chk) < tol * ssqx
+    }
 }
 
 # utility fcn to get est's, std errors, and df
@@ -243,20 +316,11 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     if (is.null(tol)) 
         tol = 1e-8
     result = apply(linfct, 1, function(x) {
-        estble = if(is.na(nbasis[1]))
-            TRUE
-        else {
-            chk = t(nbasis) %*% x
-            ssqx = sum(x*x) # BEFORE subsetting x
-            # If x really small, don't scale chk'chk
-            if (ssqx < tol) ssqx = 1
+        if (.is.estble(x, nbasis, tol)) {
             x = x[active]
-            sum(chk*chk) < tol * ssqx
-        }
-        if (estble) {
             est = sum(bhat * x)
             if(do.se) {
-                se = sqrt(sum(x * .mat.times.vec(V, x)))
+                se = sqrt(.qf.non0(V, x)) ###sqrt(sum(x * .mat.times.vec(V, x)))
                 df = dffun(x, dfargs)
             }
             else # if these unasked-for results are used, we're bound to get an error!
@@ -282,8 +346,10 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
 ### =========== Methods for ref.grid class =============================
 
 str.ref.grid <- function(object, ...) {
-    showlevs = function(x) # internal convenience function
-        cat(paste(format(x, digits = 5, justify = "none"), collapse=", "))
+    showlevs = function(x) { # internal convenience function
+        if (is.null(x)) cat("(predicted by other variables)")
+        else cat(paste(format(x, digits = 5, justify = "none"), collapse=", "))
+    }
     #cat("responses: ")
     #showlevs(object@roles$responses)
     levs = object@levels
@@ -393,10 +459,39 @@ str.ref.grid <- function(object, ...) {
     list(cv = cv, mesg = mesg, adjust = adjust)
 }
 
+### Support for different prediction types ###
+
+# Valid values for type arg or predict.type option
+.valid.types = c("link","response","lp","linear")
+
+# get "predict.type" option from misc, and make sure it's legal
+.get.predict.type = function(misc) {
+    type = misc$predict.type
+    if (is.null(type))
+        .valid.types[1]
+    else
+        .validate.type(type)
+}
+
+# check a "type" arg to make it legal
+.validate.type = function (type) {
+    .valid.types[pmatch(type, .valid.types, 1)]
+}
 
 # S3 predict method
-predict.ref.grid <- function(object, type = c("link","response","lp","linear"), ...) {
-    type <- match.arg(type)
+predict.ref.grid <- function(object, type, ...) {
+    # update with any "summary" options
+    opt = lsm.options()$summary
+    if(!is.null(opt)) {
+        opt$object = object
+        object = do.call("update.ref.grid", opt)
+    }
+    
+    if (missing(type))
+        type = .get.predict.type(object@misc)
+    else
+        type = .validate.type(type)
+    
     pred = .est.se.df(object@linfct, object@bhat, object@nbasis, object@V, object@dffun, object@dfargs, object@misc, do.se=FALSE)
     result = pred[[1]]
     if (".offset." %in% names(object@grid))
@@ -410,8 +505,13 @@ predict.ref.grid <- function(object, type = c("link","response","lp","linear"), 
 }
 
 # S3 summary method
-summary.ref.grid <- function(object, infer, level, adjust, by, 
-        type = c("link","response","lp","linear"), df, ...) {
+summary.ref.grid <- function(object, infer, level, adjust, by, type, df, ...) {
+    # update with any "summary" options
+    opt = lsm.options()$summary
+    if(!is.null(opt)) {
+        opt$object = object
+        object = do.call("update.ref.grid", opt)
+    }
     
     if(missing(df)) df = object@misc$df
     if(!is.null(df))
@@ -419,23 +519,27 @@ summary.ref.grid <- function(object, infer, level, adjust, by,
     
     result = .est.se.df(object@linfct, object@bhat, object@nbasis, object@V, object@dffun, object@dfargs, object@misc)
     
-    lblnms = setdiff(names(object@grid), object@roles$responses)
     
-    if(".offset." %in% lblnms) {
+    if(".offset." %in% names(object@grid))
         result[[1]] = result[[1]] + object@grid[[".offset."]]
-        lblnms = setdiff(lblnms, ".offset.")
-    }
+    
+    lblnms = setdiff(names(object@grid), 
+                     c(object@roles$responses, ".offset.", ".freq."))
     lbls = object@grid[lblnms]
 
-    zFlag = (all(is.na(result$df)))
-    type = match.arg(type)
-    inv = (type == "response") # flag to inverse-transform
-    
     ### implement my 'variable defaults' scheme    
     if(missing(infer)) infer = object@misc$infer
     if(missing(level)) level = object@misc$level
     if(missing(adjust)) adjust = object@misc$adjust
     if(missing(by)) by = object@misc$by.vars
+    
+    if (missing(type))
+        type = .get.predict.type(object@misc)
+    else
+        type = .validate.type(type)
+
+    zFlag = (all(is.na(result$df)))
+    inv = (type == "response") # flag to inverse-transform
     
     if ((length(infer) == 0) || !is.logical(infer)) 
         infer = c(FALSE, FALSE)
@@ -530,8 +634,8 @@ print.summary.ref.grid = function(x, ..., digits=NULL, quote=FALSE, right=TRUE) 
     xc = as.matrix(format.data.frame(x, digits=digits, na.encode=FALSE))
     m = apply(rbind(just, names(x), xc), 2, function(x) {
         w = max(sapply(x, nchar))
-        if (x[1] == "R") format(x[-(1:2)], width = w, justify="right")
-        else format(x[-(1:2)], width = w, justify="left")
+        if (x[1] == "R") format(x[-seq_len(2)], width = w, justify="right")
+        else format(x[-seq_len(2)], width = w, justify="left")
     })
     if(!is.matrix(m)) m = t(as.matrix(m))
     by.vars = attr(x, "by.vars")
@@ -566,11 +670,25 @@ print.ref.grid = function(x,...)
     print(summary.ref.grid(x, ...))
 
 
+
+# vcov method
+vcov.ref.grid = function(object, ...) {
+    tol = lsm.options("estble.tol")
+    if(is.null(tol)) 
+        tol = 1e-8
+    X = object@linfct
+    estble = apply(X, 1, .is.estble, object@nbasis, tol)
+    X[!estble, ] = NA
+    X = X[, !is.na(object@bhat)]
+    X %*% tcrossprod(object@V, X)
+}
+
+
 # Method to alter contents of misc slot
 update.ref.grid = function(object, ...) {
     args = list(...)
     valid.choices = c("adjust","avgd.over","by.vars","df","estName","famSize","infer","inv.lbl",
-        "level","methdesc","pri.vars","tran")
+        "level","methdesc","predict.type","pri.vars","tran")
     misc = object@misc
     for (nm in names(args)) {
         fullname = try(match.arg(nm, valid.choices), silent=TRUE)
