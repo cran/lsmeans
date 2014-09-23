@@ -14,11 +14,11 @@ Using a fitted model object, determine a reference grid for which least-squares 
 }
 \usage{
 ref.grid(object, at, cov.reduce = mean, mult.name, mult.levs, 
-    options = lsm.options()$ref.grid, data)
+    options = lsm.options()$ref.grid, data, ...)
 }
 
 \arguments{
-  \item{object}{An object produced by a supported model-fitting function, such as \code{lm}. }
+  \item{object}{An object produced by a supported model-fitting function, such as \code{lm}. Many models are supported. See \code{\link{models}}.}
   \item{at}{Optional named list of levels for the corresponding variables}
   \item{cov.reduce}{A function, logical value, or formula; or a named list of these. Each covariate \emph{not specified in} \code{at} is reduced according to these specifications. 
   
@@ -36,6 +36,7 @@ Any \code{cov.reduce} specification for a covariate also named in \code{at} is i
   \item{mult.levs}{A named list of levels for the dimensions of a multivariate response. If there is more than one element, the combinations of levels are used, in \code{\link{expand.grid}} order. The (total) number of levels must match the number of dimensions. If \code{mult.name} is specified, this argument is ignored.}
   \item{options}{If non-\code{NULL}, a named \code{list} of arguments to pass to \code{\link{update}}, just after the object is constructed.}
   \item{data}{A \code{data.frame} to use to obtain information about the predictors (e.g. factor levels). If missing, then \code{\link{recover.data}} is used to attempt to reconstruct the data.}
+  \item{\dots}{Optional arguments passed to \code{\link{lsm.basis}}}
 } %--- end of \arguments
 
 \details{The reference grid consists of combinations of independent variables over which predictions are made. Least-squares means are defined as these predictions, or marginal averages thereof.
@@ -63,7 +64,7 @@ Russell V. Lenth
 %% ~Make other sections like Warning with \section{Warning }{....} ~
 
 \seealso{
-See also \code{\link[lsmeans]{summary}} and other methods for the returned objcts. Reference grids are fundamental to \code{\link{lsmeans}}. Click here for more on the \code{\link[=ref.grid-class]{ref.grid}} class. 
+See also \code{\link[lsmeans]{summary}} and other methods for the returned objects. Reference grids are fundamental to \code{\link{lsmeans}}. Click here for more on the \code{\link[=ref.grid-class]{ref.grid}} class. Supported models are detailed in \code{\link{models}}.
 }
 
 \examples{

@@ -37,7 +37,7 @@ recover.data <- function(object, ...)
 # Note: if no df exists, set dffun = function(...) NA and dfargs = list()
 #--------------------------------------------------------------
 # generic version
-lsm.basis = function(object, trms, xlev, grid)
+lsm.basis = function(object, trms, xlev, grid, ...)
     UseMethod("lsm.basis")
 
 
@@ -52,7 +52,7 @@ recover.data.default <- function(object, ...) {
          paste(.show_supported(), collapse=""))
 }
 
-lsm.basis.default <- function(object, trms, xlev, grid) {
+lsm.basis.default <- function(object, trms, xlev, grid, ...) {
     stop("Can't handle an object of class", dQuote(class(object)[1]), "\n",
          .show_supported())
 }
@@ -61,11 +61,12 @@ lsm.basis.default <- function(object, trms, xlev, grid) {
 # does this by looking in namespace [ns] and methods [meth]
 # then strips that off leaving extensions
 .show_supported = function(ns = "lsmeans", meth = "lsm.basis") {
-    pat = paste(meth, ".", sep="")
-    objs = ls(envir = getNamespace(ns), pattern = pat)
-    clss = gsub(pat, "", objs)
-    c("Objects of the following classes are supported:\n",
-      paste(dQuote(setdiff(clss, "default")), collapse = ", "))
+    "Use help(\"models\", package = \"lsmeans\") for information on supported models."
+#     pat = paste(meth, ".", sep="")
+#     objs = ls(envir = getNamespace(ns), pattern = pat)
+#     clss = gsub(pat, "", objs)
+#     c("Objects of the following classes are supported:\n",
+#       paste(dQuote(setdiff(clss, "default")), collapse = ", "))
 }
 
 
@@ -123,7 +124,7 @@ recover.data.lm <- function(object, ...) {
     recover.data(fcall, delete.response(terms(object)), object$na.action, ...)
 }
 
-lsm.basis.lm <- function(object, trms, xlev, grid) {
+lsm.basis.lm <- function(object, trms, xlev, grid, ...) {
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = object$contrasts)
     # coef() works right for lm but coef.aov tosses out NAs
@@ -137,13 +138,7 @@ lsm.basis.lm <- function(object, trms, xlev, grid) {
         nbasis = matrix(NA)
     misc = list()
     if (inherits(object, "glm")) {
-        fam = object$family
-        misc$tran = fam$link
-        misc$inv.lbl = "response"
-        if (length(grep("binomial", fam$family)) == 1)
-            misc$inv.lbl = "prob"
-        else if (length(grep("poisson", fam$family)) == 1)
-            misc$inv.lbl = "rate"
+        misc = .std.link.labels(object$family, misc)
         dffun = function(k, dfargs) NA
         dfargs = list()
     }
@@ -160,8 +155,8 @@ lsm.basis.lm <- function(object, trms, xlev, grid) {
 ### mlm objects
 # (recover.data.lm works just fine)
 
-lsm.basis.mlm <- function(object, trms, xlev, grid) {
-    bas <- lsm.basis.lm(object, trms, xlev, grid)
+lsm.basis.mlm <- function(object, trms, xlev, grid, ...) {
+    bas <- lsm.basis.lm(object, trms, xlev, grid, ...)
     bhat = coef(object)
     k = ncol(bhat)
     bas$X = kronecker(diag(rep(1,k)), bas$X)
@@ -177,38 +172,38 @@ lsm.basis.mlm <- function(object, trms, xlev, grid) {
 #--------------------------------------------------------------
 ### merMod objects (lme4 package)
 recover.data.merMod <- function(object, ...) {
-    if(!isLMM(object) && !isGLMM(object)) 
+    if(!lme4::isLMM(object) && !lme4::isGLMM(object)) 
         stop("Can't handle a nonlinear mixed model")
     fcall = object@call
     recover.data(fcall, delete.response(terms(object)), 
                  attr(object@frame, "na.action"), ...)
 }
 
-lsm.basis.merMod <- function(object, trms, xlev, grid) {
+lsm.basis.merMod <- function(object, trms, xlev, grid, ...) {
     V = as.matrix(vcov(object))
     dfargs = misc = list()
-    if (isLMM(object)) {
+    if (lme4::isLMM(object)) {
         pbdis = .lsm.is.true("disable.pbkrtest")
         if (!pbdis && requireNamespace("pbkrtest")) {
             dfargs = list(unadjV = V, 
                 adjV = pbkrtest::vcovAdj.lmerMod(object, 0))
             V = as.matrix(dfargs$adjV)
-            dffun = function(k, dfargs) .KRdf.mer (dfargs$adjV, dfargs$unadjV, k)
+            tst = try(pbkrtest::Lb_ddf)
+            if(class(tst) != "try-error")
+                dffun = function(k, dfargs) pbkrtest::Lb_ddf (k, dfargs$unadjV, dfargs$adjV)
+            else {
+                dffun = function(k, dfargs) NA
+                warning("To obtain d.f., install 'pbkrtest' version 0.4-1 or later")
+            }
         }
         else {
             if(!pbdis) message("Install package 'pbkrtest' to obtain bias corrections and degrees of freedom")
             dffun = function(k, dfargs) NA
         }
     }
-    else if (isGLMM(object)) {
+    else if (lme4::isGLMM(object)) {
         dffun = function(k, dfargs) NA
-        fam = family(object)
-        misc$tran = fam$link
-        misc$inv.lbl = "response"
-        if (length(grep("binomial", fam$family)) == 1)
-            misc$inv.lbl = "prob"
-        else if (length(grep("poisson", fam$family)) == 1)
-            misc$inv.lbl = "rate"
+        misc = .std.link.labels(family(object), misc)
     }
     else 
         stop("Can't handle a nonlinear mixed model")
@@ -216,7 +211,7 @@ lsm.basis.merMod <- function(object, trms, xlev, grid) {
     contrasts = attr(object@pp$X, "contrasts")
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = contrasts)
-    bhat = fixef(object)
+    bhat = lme4::fixef(object)
     
     if (length(bhat) < ncol(X)) {
         # Newer versions of lmer can handle rank deficiency, but we need to do a couple of
@@ -225,7 +220,7 @@ lsm.basis.merMod <- function(object, trms, xlev, grid) {
         kept = match(names(bhat), dimnames(X)[[2]])
         # Now re-do bhat with NAs in the right places
         bhat = NA * X[1, ]
-        bhat[kept] = fixef(object)
+        bhat[kept] = lme4::fixef(object)
         # we have to reconstruct the model matrix
         modmat = model.matrix(trms, object@frame, contrasts.arg=contrasts)
         nbasis = nonest.basis(modmat)
@@ -252,21 +247,15 @@ lsm.basis.mer <- lsm.basis.merMod
 ### lme objects (nlme package)
 recover.data.lme <- recover.data.lm
 
-lsm.basis.lme <- function(object, trms, xlev, grid) {
+lsm.basis.lme <- function(object, trms, xlev, grid, ...) {
     contrasts = object$contrasts
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = contrasts)
-    bhat = fixef(object)
+    bhat = nlme::fixef(object)
     V = vcov(object)
     misc = list()
     if (!is.null(object$family)) {
-        fam = object$family
-        misc$tran = fam$link
-        misc$inv.lbl = "response"
-        if (length(grep("binomial", fam$family)) == 1)
-            misc$inv.lbl = "prob"
-        else if (length(grep("poisson", fam$family)) == 1)
-            misc$inv.lbl = "rate"
+        misc = .std.link.labels(object$family, misc)
     }
     nbasis = matrix(NA)
     dffun = function(...) NA
@@ -279,11 +268,11 @@ lsm.basis.lme <- function(object, trms, xlev, grid) {
 ### gls objects (nlme package)
 recover.data.gls <- function(object, ...) {
     fcall = object$call
-    recover.data(fcall, delete.response(getCovariateFormula(object)), 
+    recover.data(fcall, delete.response(nlme::getCovariateFormula(object)), 
                  object$na.action, ...)
 }
 
-lsm.basis.gls <- function(object, trms, xlev, grid) {
+lsm.basis.gls <- function(object, trms, xlev, grid, ...) {
     contrasts = object$contrasts
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = contrasts)
@@ -301,7 +290,7 @@ lsm.basis.gls <- function(object, trms, xlev, grid) {
 ### polr objects (MASS package)
 recover.data.polr <- recover.data.lm
 
-lsm.basis.polr <- function(object, trms, xlev, grid) {
+lsm.basis.polr <- function(object, trms, xlev, grid, ...) {
     contrasts = object$contrasts
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = contrasts)
@@ -336,7 +325,7 @@ recover.data.survreg <- recover.data.lm
 # Seems to work right in a little testing.
 # However, it fails sometimes if I update the model 
 # with a subset argument. Workaround: just fitting a new model
-lsm.basis.survreg <- function(object, trms, xlev, grid) {
+lsm.basis.survreg <- function(object, trms, xlev, grid, ...) {
     # Much of this code is adapted from predict.survreg
     bhat = object$coefficients
     k = length(bhat)
@@ -361,9 +350,9 @@ lsm.basis.survreg <- function(object, trms, xlev, grid) {
 ###  coxph objects (survival package)
 recover.data.coxph <- recover.data.survreg
 
-lsm.basis.coxph <- function(object, trms, xlev, grid) {
+lsm.basis.coxph <- function(object, trms, xlev, grid, ...) {
     object$dist = "doesn't matter"
-    result = lsm.basis.survreg(object, trms, xlev, grid)
+    result = lsm.basis.survreg(object, trms, xlev, grid, ...)
     result$dfargs$df = NA
     # mimic code for reference = "sample" in predict.coxph
     result$X = result$X - rep(object$means, each = nrow(result$X))
@@ -381,12 +370,166 @@ lsm.basis.coxph <- function(object, trms, xlev, grid) {
 recover.data.coxme <- recover.data.coxph
 
 # I guess this works because it's based on lme code
-lsm.basis.coxme <- function(object, trms, xlev, grid) {
-    result <- lsm.basis.lme(object, trms, xlev, grid)
+lsm.basis.coxme <- function(object, trms, xlev, grid, ...) {
+    result <- lsm.basis.lme(object, trms, xlev, grid, ...)
     result$misc$tran = "log"
     result$misc$inv.lbl = "hazard"
     result
 }
+
+
+###  special vcov prototype for cases where there are several vcov options
+###  e.g., gee, geeglm, geese
+.named.vcov = function(object, method, ...)
+    UseMethod(".named.vcov")
+
+# default has optional idx of same length as valid and if so, idx indicating 
+#   which elt of valid to use if matched
+# Ex: valid = c("mammal", "fish", "rat", "dog", "trout", "perch")
+#     idx   = c(   1,        2,     1,     1,       2,       2)
+#     -- so ultimately results can only be "mammal" or "fish"
+# nonmatches revert to 1st elt.
+.named.vcov.default = function(object, method, valid, idx = seq_along(valid), ...) {
+    i = pmatch(method, valid, 1)
+    method = valid[idx[i]]
+    V = object[[method]]
+    attr(V, "methMesg") = paste("Covariance estimate used: \"", method, "\"", sep = "")
+    V
+}
+
+# general-purpose lsm.basis function
+.lsmb.geeGP = function(object, trms, xlev, grid, vcov.method, valid, idx = seq_along(valid), ...) {
+    m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
+    X = model.matrix(trms, m, contrasts.arg = object$contrasts)
+    bhat = coef(object)
+    V = .named.vcov(object, vcov.method, valid, idx, ...)
+    
+    if (sum(is.na(bhat)) > 0)
+        nbasis = nonest.basis(object$qr)
+    else
+        nbasis = matrix(NA)
+    
+    misc = .std.link.labels(object$family, list())
+    misc$initMesg = attr(V, "methMesg")
+    dffun = function(k, dfargs) NA
+    dfargs = list()
+    list(X=X, bhat=bhat, nbasis=nbasis, V=V, dffun=dffun, dfargs=dfargs, misc=misc)
+}
+
+#---------------------------------------------------------------
+###  gee objects  ####
+
+
+recover.data.gee = recover.data.lm
+
+lsm.basis.gee = function(object, trms, xlev, grid, vcov.method = "robust.variance", ...)
+    .lsmb.geeGP(object, trms, xlev, grid, vcov.method, 
+                valid = c("robust.variance", "naive.variance"))
+
+###  geepack objects  ####
+recover.data.geeglm = recover.data.lm
+
+lsm.basis.geeglm = function(object, trms, xlev, grid, vcov.method = "vbeta", ...) {
+    m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
+    X = model.matrix(trms, m, contrasts.arg = object$contrasts)
+    bhat = coef(object)
+    V = .named.vcov(object$geese, vcov.method, 
+                    valid = c("vbeta", "vbeta.naiv","vbeta.j1s","vbeta.fij","robust","naive"), 
+                    idx = c(1,2,3,4,1,2))
+    
+    if (sum(is.na(bhat)) > 0)
+        nbasis = nonest.basis(object$qr)
+    else
+        nbasis = matrix(NA)
+    
+    misc = .std.link.labels(object$family, list())
+    misc$initMesg = attr(V, "methMesg")
+    dffun = function(k, dfargs) NA
+    dfargs = list()
+    list(X=X, bhat=bhat, nbasis=nbasis, V=V, dffun=dffun, dfargs=dfargs, misc=misc)
+}
+
+
+recover.data.geese = function(object, ...) {
+    fcall = object$call
+    # what a pain - we need to reconstruct the terms component
+    args = as.list(fcall[-1])
+    na.action = object$na.action
+    #trms = terms.formula(fcall$formula)
+    if (!is.null(args$data)) {
+        data = eval(args$data, parent.frame())
+        trms = terms(model.frame(fcall$formula, data = data))
+    } else {
+        trms = terms(model.frame(fcall$formula))
+    }
+    recover.data(fcall, delete.response(trms), na.action, ...)
+}
+
+lsm.basis.geese = function(object, trms, xlev, grid, vcov.method = "vbeta", ...) {
+    m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
+    X = model.matrix(trms, m, contrasts.arg = object$contrasts)
+    bhat = object$beta
+    V = .named.vcov(object, vcov.method, 
+                    valid = c("vbeta", "vbeta.naiv","vbeta.j1s","vbeta.fij","robust","naive"), 
+                    idx = c(1,2,3,4,1,2))
+
+    # We don't have the qr component - I'm gonna punt for now
+     if (sum(is.na(bhat)) > 0)
+         warning("There are non-estimable functions, but estimability is NOT being checked")
+#         nbasis = nonest.basis(object$qr)
+#     else
+        nbasis = matrix(NA)
+    
+    misc = .std.link.labels(eval(object$call$family)(), list())
+    misc$initMesg = attr(V, "methMesg")
+    dffun = function(k, dfargs) NA
+    dfargs = list()
+    list(X=X, bhat=bhat, nbasis=nbasis, V=V, dffun=dffun, dfargs=dfargs, misc=misc)
+}
+
+
+
+#--------------------------------------------------------------
+### afex package - mixed objects ###
+# just need to provide an 'lsmeans' method here, assuming Henrik adds the 'data' item
+
+recover.data.mixed <- function(object, ...) {
+    recover.data.merMod(object$full.model, ...)
+}
+
+lsm.basis.mixed <- function(object, trms, xlev, grid, ...) {
+    lsm.basis.merMod(object$full.model, trms, xlev, grid, ...)
+}
+
+
+### glmmADMB package
+
+recover.data.glmmadmb = recover.data.lm
+
+lsm.basis.glmmadmb = function (object, trms, xlev, grid, ...) 
+{
+    contrasts = object$contrasts
+    m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
+    X = model.matrix(trms, m, contrasts.arg = contrasts)
+    bhat = glmmADMB::fixef(object)
+    V = vcov(object)
+    misc = list()
+    if (!is.null(object$family)) {
+        fam = object$family
+        misc$tran = object$link
+        misc$inv.lbl = "response"
+        if (!is.na(pmatch(fam,"binomial"))) 
+            misc$inv.lbl = "prob"
+        else if (!is.na(pmatch(fam,"poisson"))) 
+            misc$inv.lbl = "rate"
+    }
+    nbasis = matrix(NA)
+    dffun = function(...) NA
+    list(X = X, bhat = bhat, nbasis = nbasis, V = V, dffun = dffun, 
+         dfargs = list(), misc = misc)
+}
+
+
 
 
 #--------------------------------------------------------------
@@ -414,4 +557,16 @@ nonest.basis <- function(qrX) {
     # permute the rows via pivot
     nbasis[qrX$pivot, ] = nbasis
     nbasis
+}
+
+# Call this to do the standard stuff with link labels
+# Returns a modified misc
+.std.link.labels = function(fam, misc) {
+    misc$tran = fam$link
+    misc$inv.lbl = "response"
+    if (length(grep("binomial", fam$family)) == 1)
+        misc$inv.lbl = "prob"
+    else if (length(grep("poisson", fam$family)) == 1)
+        misc$inv.lbl = "rate"
+    misc
 }

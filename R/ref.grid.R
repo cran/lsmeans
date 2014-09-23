@@ -8,7 +8,7 @@
 #     FALSE - same as function(x) sort(unique(x))
 
 ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs, 
-                     options = lsm.options()$ref.grid, data) {
+                     options = lsm.options()$ref.grid, data, ...) {
     # recover the data
     if (missing(data)) {
         data = try(recover.data (object, data = NULL))
@@ -135,7 +135,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
         ref.levels[[xnm]] = NULL
     }
     
-    basis = lsm.basis(object, trms, xlev, grid)
+    basis = lsm.basis(object, trms, xlev, grid, ...)
     
     misc = basis$misc
     
@@ -294,7 +294,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
 }
 
 # utility to check estimability of x'beta, given nonest.basis
-.is.estble = function(x, nbasis, tol) {
+.is.estble = function(x, nbasis, tol=1e-8) {
     if(is.na(nbasis[1]))
         TRUE
     else {
@@ -555,15 +555,18 @@ summary.ref.grid <- function(object, infer, level, adjust, by, type, df, ...) {
     }
     else
         link = NULL
+    
     attr(result, "link") = NULL
+    estName = names(result)[1]
 
-    mesg = NULL
+    mesg = object@misc$initMesg
     
     by.size = nrow(object@grid)
     if (!is.null(by))
         for (nm in by)
             by.size = by.size / length(unique(object@levels[[nm]]))
     fam.info = c(object@misc$famSize, by.size)
+    cnm = NULL
     
     if(infer[1]) { # add CIs
         quant = 1 - (1 - level)/2
@@ -578,11 +581,11 @@ summary.ref.grid <- function(object, infer, level, adjust, by, type, df, ...) {
             result[[cnm[1]]] = link$linkinv(result[[cnm[1]]])
             result[[cnm[2]]] = link$linkinv(result[[cnm[2]]])
         }
-        mesg = c(paste("Confidence level used:", level), acv$mesg)
+        mesg = c(mesg, paste("Confidence level used:", level), acv$mesg)
     }
     if(infer[2]) { # add tests
-        cnm = ifelse (zFlag, "z.ratio", "t.ratio")
-        t.ratio = result[[cnm]] = result[[1]] / result$SE
+        tnm = ifelse (zFlag, "z.ratio", "t.ratio")
+        t.ratio = result[[tnm]] = result[[1]] / result$SE
         apv = .adj.p.value(t.ratio, result$df, adjust, fam.info)
         adjust = apv$adjust   # in case it was abbreviated
         result$p.value = apv$pval
@@ -602,6 +605,8 @@ summary.ref.grid <- function(object, infer, level, adjust, by, type, df, ...) {
                  paste(object@misc$avgd.over, collapse = ", ")), mesg)
 
     summ = cbind(lbls, result)
+    attr(summ, "estName") = estName
+    attr(summ, "clNames") = cnm  # will be NULL if infer[1] is FALSE
     attr(summ, "pri.vars") = setdiff(union(object@misc$pri.vars, object@misc$by.vars), by)
     attr(summ, "by.vars") = by
     attr(summ, "mesg") = unique(mesg)
@@ -673,7 +678,7 @@ print.ref.grid = function(x,...)
 
 # vcov method
 vcov.ref.grid = function(object, ...) {
-    tol = lsm.options("estble.tol")
+    tol = lsm.options()$estble.tol
     if(is.null(tol)) 
         tol = 1e-8
     X = object@linfct
@@ -685,17 +690,28 @@ vcov.ref.grid = function(object, ...) {
 
 
 # Method to alter contents of misc slot
-update.ref.grid = function(object, ...) {
+update.ref.grid = function(object, ..., silent = FALSE) {
     args = list(...)
-    valid.choices = c("adjust","avgd.over","by.vars","df","estName","famSize","infer","inv.lbl",
+    valid.choices = c("adjust","alpha","avgd.over","by.vars","df",
+        "initMesg","estName","famSize","infer","inv.lbl",
         "level","methdesc","predict.type","pri.vars","tran")
     misc = object@misc
     for (nm in names(args)) {
         fullname = try(match.arg(nm, valid.choices), silent=TRUE)
-        if(inherits(fullname, "try-error"))
-            message("Argument ", sQuote(nm), " was ignored. Valid choices are:\n",
+        if(inherits(fullname, "try-error")) {
+            if (!silent)
+                message("Argument ", sQuote(nm), " was ignored. Valid choices are:\n",
                     paste(valid.choices, collapse=", "))
+        }
         else {
+            if (fullname == "by.vars") {
+                allvars = union(misc$pri.vars, misc$by.vars)
+                misc$pri.vars = setdiff(allvars, args[[nm]])
+            }
+            if (fullname == "pri.vars") {
+                allvars = union(misc$pri.vars, misc$by.vars)
+                misc$by.vars = setdiff(allvars, args[[nm]])
+            }
             misc[[fullname]] = args[[nm]]
         }
     }

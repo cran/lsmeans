@@ -72,7 +72,7 @@ MASS:::predict.lqs
 ###################################################
 ### code chunk number 11: extending.rnw:120-131
 ###################################################
-lsm.basis.lqs = function(object, trms, xlev, grid) {
+lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = object$contrasts)
     bhat = coef(object)
@@ -100,7 +100,7 @@ lsmeans(fake.lts, ~ B | A)
 ###################################################
 ### code chunk number 14: extending.rnw:157-166
 ###################################################
-lsm.basis.lqs = function(object, trms, xlev, grid) {
+lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = object$contrasts)
     bhat = coef(object)

@@ -28,11 +28,11 @@ lsmeans = function(object, specs, ...)
 
 # 
 lsmeans.default = function(object, specs, ...) {
-    rgargs = .args.for.fcn(ref.grid, list(object=object, ...))
+    rgargs = list(object = object, ...) ####.args.for.fcn(ref.grid, list(object=object, ...))
     rgargs$options = NULL  # don't pass options to ref.grid
     RG = do.call("ref.grid", rgargs)
     lsargs = list(object = RG, specs = specs, ...)
-    for (nm in names(rgargs)[-1]) lsargs[[nm]] = NULL
+    #for (nm in names(rgargs)[-1]) lsargs[[nm]] = NULL
     do.call("lsmeans", lsargs)###lsmeans(RG, specs, ...)
 }
 
@@ -105,8 +105,9 @@ lsmeans.list = function(object, specs, ...) {
 
 
 # Generic for after we've gotten specs in character form
-lsmeans.character = function(object, specs, ...)
-    UseMethod("lsmeans.character", object)
+lsmeans.character = function(object, specs, ...) {
+    UseMethod("lsmeans.character")####, object)
+}
 
 # Needed for model objects
 lsmeans.character.default = function(object, specs, ...)
@@ -377,8 +378,50 @@ confint.ref.grid = function(object, parm, level=.95, ...) {
 test = function(object, parm, ...) {
     UseMethod("test")
 }
-test.ref.grid = function(object, parm, ...) {
-    summary(object, infer=c(FALSE,TRUE), ...)
+
+
+test.ref.grid = function(object, parm = 0, 
+    joint = FALSE, verbose = FALSE, rows, ...) {
+# if joint = FALSE, this is a courtesy method for 'contrast'
+# else it computes the F test or Wald test of H0: L*beta = parm
+# where L = object@linfct    
+    if (!joint)
+        summary(object, infer=c(FALSE,TRUE), ...)
+    else {
+        if(verbose) {
+            cat("Joint test of the following linear predictions\n")
+            print(cbind(object@grid, equals = parm))
+        } 
+        L = object@linfct
+        if (!missing(rows)) L = L[rows, , drop = FALSE]
+        if(!all(apply(L, 1, .is.estble, object@nbasis)))
+            stop("One or more linear functions is not estimable")
+        
+        estble.idx = which(!is.na(object@bhat))
+        bhat = object@bhat[estble.idx]
+        L = L[, estble.idx, drop = FALSE]
+        # Check rank
+        qrLt = qr(t(L))
+        r = qrLt$rank
+        if (r < nrow(L)) {
+            if(!all(parm==0))
+                stop("Rows are linearly dependent - cannot do the test when 'parm' != 0")
+            else
+                message("Note: rows are linearly dependent - reducing the df")
+        }
+        tR = t(qr.R(qrLt))[1:r,1:r]
+        tQ = t(qr.Q(qrLt))[1:r, , drop = FALSE]
+        if(length(parm) < r) parm = rep(parm,r)
+        z = tQ %*% bhat - solve(tR, parm[1:r])
+        zcov = tQ %*% object@V %*% t(tQ)
+        F = sum(z * solve(zcov, z)) / r
+        df2 = object@dffun(tQ, object@dfargs)
+        if (is.na(df2))
+            result = c(chisq = F*r, df = r, p.value = pchisq(F*r, r, lower.tail = FALSE))
+        else
+            result = c(F = F, df1 = r, df2 = df2, p.value = pf(F, r, df2, lower.tail = FALSE))
+        round(result, 4)
+    }
 }
 
 # pairs method
@@ -420,7 +463,7 @@ lstrends = function(model, specs, var, delta.var=.01*rng, data, ...) {
     grid = RG@grid
     grid[[var]] = grid[[var]] + delta.var
     
-    basis = lsm.basis(model, attr(data, "terms"), RG@roles$xlev, grid)
+    basis = lsm.basis(model, attr(data, "terms"), RG@roles$xlev, grid, ...)
     if (is.null(fcn))
         newlf = (basis$X - RG@linfct) / delta.var
     else {
@@ -470,3 +513,32 @@ lstrends = function(model, specs, var, delta.var=.01*rng, data, ...) {
     return(FALSE)
 }
 
+# Construct a new lsmobj with given arguments
+lsmobj = function(bhat, V, levels, linfct, df = NA, ...) {
+    if ((nrow(V) != ncol(V)) || (nrow(V) != ncol(linfct)) || (length(bhat) != ncol(linfct)))
+        stop("bhat, V, and linfct are incompatible")
+    if (!is.list(levels))
+        levels = list(level = levels)
+    grid = do.call(expand.grid, levels)
+    if (nrow(grid) != nrow(linfct))
+        stop("linfct should have ", nrow(grid), "rows")
+    model.info = list(call = match.call(), xlev = levels)
+    roles = list(predictors= names(grid), responses=character(0), multresp=character(0))
+    if (is.function(df)) {
+        dffun = df
+        dfargs = list(...)$dfargs
+    } 
+    else {
+        dffun = function(x, dfargs) dfargs$df
+        dfargs = list(df = df)
+    }
+    misc = list(estName = "estimate", infer = c(TRUE,FALSE), level = .95,
+                adjust = "none", famSize = nrow(linfct), 
+                avgd.over = character(0), pri.vars = names(grid),
+                methDesc = "lsmobj")
+    result = new("lsmobj", model.info=model.info, roles=roles, grid=grid,
+                 levels = levels, matlevs=list(),
+                 linfct=linfct, bhat=bhat, nbasis=matrix(NA), V=V,
+                 dffun=dffun, dfargs=dfargs, misc=misc)
+    update(result, ..., silent=TRUE)
+}
