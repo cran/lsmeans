@@ -132,3 +132,4 @@ del.eff.lsmc = function(levs, ...) {
     attr(M, "adjust") = "fdr"
     M
 }
+

@@ -59,20 +59,46 @@ The user may disable the use of \pkg{pbkrtest} via \samp{lsm.options(disable.pbk
 \item{glmerMod}{No degrees of freedom are available for these objects, so tests and confidence intervals are asymptotic.}
 }}% lme4
 
+\section{\pkg{lme4.0} package}{
+\describe{
+\item{mer}{Only asymptotic results are available (no d.f.).}
+}}% lme4.0
 
 \section{\pkg{MASS} package}{
 \describe{
-\item{polr}{The boundaries between categories in the ordinal response are included in  the reference grid as the factor \code{cut}. Thus, the user may specify which cut-point to use in estimating cumulative probabilities.}
+\item{glmmPQL}{Supported by virtue of inheritance from \code{lme} in the \pkg{nlme} package.}
+\item{polr}{There are two optional arguments: \code{mode} and \code{rescale} (which defaults to \samp{c(0,1)}). For details, see the documentation below regarding the support for the \pkg{ordinal} package, which produces comparable objects.
+Tests and confidence intervals are asymptotic.}
 \item{rlm}{Supported by virtue of inheritance from \code{lm}.}
 }}% MASS
 
+\section{\pkg{mgcv} package}{
+\describe{
+\item{gam}{Supported by virtue of inheritance from \code{glm}.}
+\item{gamm}{Not supported at this time.}
+}}% mgcv
 
 
 \section{\pkg{nlme} package}{
 \describe{
-\item{lme, gls}{No degrees of freedom are available for these objects, so tests and confidence intervals are asymptotic.}
+\item{gls}{No degrees of freedom are available for these objects, so tests and confidence intervals are asymptotic.}
+\item{lme}{No degrees of freedom, as per \code{gls} objects. The optional argument \code{adjustSigma} (defaults to \code{TRUE}) will adjust standard errors like in \code{\link[nlme]{summary.lme}} when the model is fitted using the \code{"ML"} method. \bold{Note:} It is possible for the \code{adjust} argument (for \eqn{p}-value adjustments) to conflict with \code{adjustSigma}. The workaround is to specify both: e.g., \samp{lsmeans(mod.lme, pairwise ~ trt, adjustSigma = TRUE, adjust = "none")}}
 }}% nlme
 
+\section{\pkg{ordinal} package}{
+\describe{
+\item{clm,clmm}{The reference grid will include all variables that appear in the main model as well as those in the \code{scale} or \code{nominal} models. There are two optional arguments: \code{mode} (a character string) and \code{rescale} (which defaults to \samp{c(0,1)}). \code{mode} should match one of \code{"latent"} (the default), \code{"linear.predictor"}, \code{"cum.prob"}, or \code{"prob"} (as per the \code{type} argument in \code{\link[ordinal]{predict.clm}}). 
+
+With \samp{mode = "latent"}, the reference-grid predictions are made on the scale of the latent variable implied by the model. The scale and location of this latent variable are arbitrary, and may be altered via \code{rescale}. The predictions are multiplied by \samp{rescale[2]}, then \samp{rescale[1]} is added. Keep in mind that the scaling is related to the link function used in the model; for example, changing from a probit link to a logistic link will inflate the latent values by around \eqn{\pi/\sqrt{3}}{pi/sqrt(3)}, all other things being equal. \code{rescale} has no effect for other values of \code{mode}.
+
+With \samp{mode = "linear.predictor"} and \code{mode = "cum.prob"}, the boundaries between categories (i.e., thresholds) in the ordinal response are included in  the reference grid as a pseudo-factor named \code{cut}. The reference-grid predictions are then of the cumulative probabilities at each threshold (for \code{mode = "cum.prob"}) or the link function thereof (for \code{mode = "linear.predictor"}).
+
+With \code{mode = "prob"}, a pseudo-factor named \code{class} is created, and the grid predictions are of the probabilities of each class of the ordinal response.
+
+Any grid point that is non-estimable by either the location or the scale model (if present) is set to \code{NA}, and any LS-means involving such a grid point will also be non-estimable. A consequence of this is that if there is a rank-deficient \code{scale} model, and then \emph{all} latent responses become non-estimable because the predictions are made using the average log-scale estimate.
+
+Tests and confidence intervals are asymptotic.}
+}}% ordinal
 
 \section{\pkg{survival} package}{
 \describe{

@@ -151,11 +151,13 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     multresp = character(0) ### ??? was list()
     ylevs = misc$ylevs
     if(!is.null(ylevs)) { # have a multivariate situation
-        if (missing(mult.levs)) {
+       if (missing(mult.levs)) {
             if (missing(mult.name))
                 mult.name = names(ylevs)[1]
             ref.levels[[mult.name]] = ylevs[[1]]
             multresp = mult.name
+            MF = data.frame(ylevs)
+            names(MF) = mult.name
         }
         else {
             k = prod(sapply(mult.levs, length))
@@ -164,8 +166,10 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
             for (nm in names(mult.levs))
                 ref.levels[[nm]] = mult.levs[[nm]]
             multresp = names(mult.levs)
+            MF = do.call("expand.grid", mult.levs)
         }
-        grid = do.call("expand.grid", ref.levels)
+        ###grid = do.call("expand.grid", ref.levels)
+        grid = merge(grid, MF)
         # add any matrices
         for (nm in names(matlevs))
             grid[[nm]] = matrix(rep(matlevs[[nm]], each=nrow(grid)), nrow=nrow(grid))
@@ -200,13 +204,13 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
         basis$X = basis$X[incl.flags, , drop=FALSE]
     }
 
-    # Any offsets???
-    if (!is.null(off.idx <- attr(trms, "offset"))) {
-        offset = rep(0, nrow(grid))
-        tvars = attr(trms, "variables")
-        for (i in off.idx)
-            offset = offset + eval(tvars[[i+1]], grid)
-        grid[[".offset."]] = offset
+    # Any offsets??? (misc$offset.mult might specify removing or reversing the offset)
+    if(!is.null(attr(trms,"offset"))) {
+        om = 1
+        if (!is.null(misc$offset.mult))
+            om = misc$offset.mult
+        if (any(om != 0))
+            grid[[".offset."]] = om * .get.offset(trms, grid)
     }
 
     ### --- Determine frequencies --- (added ver.2.11)
@@ -245,7 +249,14 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
         result = do.call("update.ref.grid", options)
     }
 
-    result
+    if(!is.null(hook <- misc$postGridHook)) {
+        if (is.character(hook))
+            hook = get(hook)
+        result@misc$postGridHook = NULL
+        hook(result)
+    }
+    else
+        result
 }
 
 
@@ -284,6 +295,16 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     intersect(unique(unlist(cvars)), covs.d)
 }
 
+# calculate the offset for the given grid
+.get.offset = function(terms, grid) {
+    off.idx = attr(terms, "offset")
+    offset = rep(0, nrow(grid))
+    tvars = attr(terms, "variables")
+    for (i in off.idx)
+        offset = offset + eval(tvars[[i+1]], grid)
+    offset
+}
+
 
 # Computes the quadratic form y'Xy after subsetting for the nonzero elements of y
 .qf.non0 = function(X, y) {
@@ -294,7 +315,9 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
 }
 
 # utility to check estimability of x'beta, given nonest.basis
-.is.estble = function(x, nbasis, tol=1e-8) {
+is.estble = function(x, nbasis, tol=1e-8) {
+    if (is.matrix(x))
+        return(apply(x, 1, is.estble, nbasis, tol))
     if(is.na(nbasis[1]))
         TRUE
     else {
@@ -309,28 +332,41 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
 # utility fcn to get est's, std errors, and df
 # new arg: do.se -- if FALSE, just do the estimates and return 0 for se and df
 # returns a data.frame with an add'l "link" attribute if misc$tran is non-null
-.est.se.df = function(linfct, bhat, nbasis, V, dffun, dfargs, misc, do.se=TRUE, 
-                      tol=getOption("lsmeans")$estble.tol) {
-    active = which(!is.na(bhat))
-    bhat = bhat[active]
+# .est.se.df = function(linfct, bhat, nbasis, V, dffun, dfargs, misc, do.se=TRUE, 
+#                       tol=getOption("lsmeans")$estble.tol) {
+# 2.13: Revised to call w/ just object instead of all those args (except linfct)
+# Also moved offest comps to here, and provided for misc$estHook
+.est.se.df = function(object, do.se=TRUE, tol=lsm.options()$estble.tol) {
     if (is.null(tol)) 
         tol = 1e-8
-    result = apply(linfct, 1, function(x) {
-        if (.is.estble(x, nbasis, tol)) {
-            x = x[active]
-            est = sum(bhat * x)
-            if(do.se) {
-                se = sqrt(.qf.non0(V, x)) ###sqrt(sum(x * .mat.times.vec(V, x)))
-                df = dffun(x, dfargs)
+    misc = object@misc
+    if (!is.null(hook <- misc$estHook)) {
+        if (is.character(hook)) hook = get(hook)
+        result = hook(object, do.se=do.se, tol=tol)
+    }
+    else {
+        active = which(!is.na(object@bhat))
+        bhat = object@bhat[active]
+        result = t(apply(object@linfct, 1, function(x) {
+            if (is.estble(x, object@nbasis, tol)) {
+                x = x[active]
+                est = sum(bhat * x)
+                if(do.se) {
+                    se = sqrt(.qf.non0(object@V, x))
+                    df = object@dffun(x, object@dfargs)
+                }
+                else # if these unasked-for results are used, we're bound to get an error!
+                    se = df = 0
+                c(est, se, df)
             }
-            else # if these unasked-for results are used, we're bound to get an error!
-                se = df = 0
-            c(est, se, df)
-        }
-        else c(NA,NA,NA)
-    })
-    result = as.data.frame(t(result))
+            else c(NA,NA,NA)
+        }))
+        if (!is.null(object@grid$.offset.))
+            result[, 1] = result[, 1] + object@grid$.offset.
+    }
+    result = as.data.frame(result)
     names(result) = c(misc$estName, "SE", "df")
+    
     if (!is.null(misc$tran) && (misc$tran != "none")) {
         if(is.character(misc$tran)) {
             link = try(make.link(misc$tran), silent=TRUE)
@@ -384,13 +420,16 @@ str.ref.grid <- function(object, ...) {
 
 
 # utility to compute an adjusted p value
-.adj.p.value = function(t, df, adjust, fam.info) {
+# tail is -1, 0, 1 for left, two-sided, or right
+.adj.p.value = function(t, df, adjust, fam.info, tail) {
 # do a pmatch of the adjust method, case insensitive
-    adj.meths = c("tukey", "sidak", "scheffe", p.adjust.methods)
+    adj.meths = c("sidak", "tukey", "scheffe", p.adjust.methods)
     k = pmatch(tolower(adjust), adj.meths)
     if(is.na(k))
-        stop("Adjust method '", adjust, "' is not recognized")
+        stop("Adjust method '", adjust, "' is not recognized or not valid")
     adjust = adj.meths[k]
+    if ((tail != 0) && (k %in% 2:3)) # One-sided tests, change Tukey/Scheffe to Bonferroni
+        adjust = "bonferroni"
     
     # pseudo-asymptotic results when df is NA
     df[is.na(df)] = 10000
@@ -398,7 +437,10 @@ str.ref.grid <- function(object, ...) {
     fam.size = fam.info[1]
     n.contr = fam.info[2] ## n.contr = sum(!is.na(t))
     abst = abs(t)
-    unadj.p = 2*pt(abst, df, lower.tail=FALSE)
+    if (tail == 0)
+        unadj.p = 2*pt(abst, df, lower.tail=FALSE)
+    else
+        unadj.p = pt(t, df, lower.tail = (tail<0))
     if (adjust %in% p.adjust.methods) {
         if (n.contr == length(unadj.p))
             pval = p.adjust(unadj.p, adjust, n = n.contr)
@@ -407,8 +449,8 @@ str.ref.grid <- function(object, ...) {
                 function(pp) p.adjust(pp, adjust, n=sum(!is.na(pp)))))
     }
     else pval = switch(adjust,
+        sidak = 1 - (1 - unadj.p)^n.contr,
         tukey = ptukey(sqrt(2)*abst, fam.size, zapsmall(df), lower.tail=FALSE),
-        sidak = 1 - (1 - 2*pt(abst, df, lower.tail=FALSE))^n.contr,
         scheffe = pf(t^2/(fam.size-1), fam.size-1, df, lower.tail=FALSE),
     )
     chk.adj = match(adjust, c("none", "tukey", "scheffe"), nomatch = 99)
@@ -492,10 +534,11 @@ predict.ref.grid <- function(object, type, ...) {
     else
         type = .validate.type(type)
     
-    pred = .est.se.df(object@linfct, object@bhat, object@nbasis, object@V, object@dffun, object@dfargs, object@misc, do.se=FALSE)
+    pred = .est.se.df(object, do.se=FALSE)
     result = pred[[1]]
-    if (".offset." %in% names(object@grid))
-        result = result + object@grid[[".offset."]]
+# MOVED TO .EST.SE.DF    
+#     if (".offset." %in% names(object@grid))
+#         result = result + object@grid[[".offset."]]
     if (type == "response") {
         link = attr(pred, "link")
         if (!is.null(link))
@@ -505,7 +548,8 @@ predict.ref.grid <- function(object, type, ...) {
 }
 
 # S3 summary method
-summary.ref.grid <- function(object, infer, level, adjust, by, type, df, ...) {
+summary.ref.grid <- function(object, infer, level, adjust, by, type, df, 
+                             null = 0, delta = 0, side = 0, ...) {
     # update with any "summary" options
     opt = lsm.options()$summary
     if(!is.null(opt)) {
@@ -517,11 +561,14 @@ summary.ref.grid <- function(object, infer, level, adjust, by, type, df, ...) {
     if(!is.null(df))
         object@dffun = function(k, dfargs) df
     
-    result = .est.se.df(object@linfct, object@bhat, object@nbasis, object@V, object@dffun, object@dfargs, object@misc)
+    # reconcile all the different ways we could specify the alternative
+    # ... and map each to one of the first 3 subscripts
+    side.opts = c("left","both","right","two-sided","noninferiority","nonsuperiority","equivalence","superiority","inferiority","0","2","-1","1","+1","<",">","!=","=")
+    side.map =  c( 1,     2,     3,      2,          3,               1,               2,            3,            1,            2,  2,   1,  3,   3,  1,  3,  2,   2)
+    side = side.map[pmatch(side, side.opts, 2)[1]] - 2
+    delta = abs(delta)
     
-    
-    if(".offset." %in% names(object@grid))
-        result[[1]] = result[[1]] + object@grid[[".offset."]]
+    result = .est.se.df(object)
     
     lblnms = setdiff(names(object@grid), 
                      c(object@roles$responses, ".offset.", ".freq."))
@@ -584,14 +631,31 @@ summary.ref.grid <- function(object, infer, level, adjust, by, type, df, ...) {
         mesg = c(mesg, paste("Confidence level used:", level), acv$mesg)
     }
     if(infer[2]) { # add tests
+        if (!all(null == 0)) {
+            result[["null"]] = null
+            if (!is.null(link))
+                result[["null"]] = link$linkinv(result[["null"]])
+        }
         tnm = ifelse (zFlag, "z.ratio", "t.ratio")
-        t.ratio = result[[tnm]] = result[[1]] / result$SE
-        apv = .adj.p.value(t.ratio, result$df, adjust, fam.info)
+        tail = ifelse(side == 0, -sign(abs(delta)), side)
+        if (side == 0) {
+            if (delta == 0) # two-sided sig test
+                t.ratio = result[[tnm]] = (result[[1]] - null) / result$SE
+            else
+                t.ratio = result[[tnm]] = (abs(result[[1]] - null) - delta) / result$SE
+        }
+        else {
+            t.ratio = result[[tnm]] = (result[[1]] - null + side * delta) / result$SE            
+        }
+        apv = .adj.p.value(t.ratio, result$df, adjust, fam.info, tail)
         adjust = apv$adjust   # in case it was abbreviated
         result$p.value = apv$pval
         mesg = c(mesg, apv$mesg)
-        if(zFlag) 
-            mesg = c(mesg, "P values are asymptotic")
+        if (delta > 0)
+            mesg = c(mesg, paste("Statistics are tests of", c("nonsuperiority","equivalence","noninferiority")[side+2],
+                                 "with a threshold of", delta))
+        if(tail != 0) 
+            mesg = c(mesg, paste("P values are ", ifelse(tail<0,"left-","right-"),"tailed", sep=""))
         if (!is.null(link)) 
             mesg = c(mesg, "Tests are performed on the linear-predictor scale")
     }
@@ -681,11 +745,18 @@ vcov.ref.grid = function(object, ...) {
     tol = lsm.options()$estble.tol
     if(is.null(tol)) 
         tol = 1e-8
-    X = object@linfct
-    estble = apply(X, 1, .is.estble, object@nbasis, tol)
-    X[!estble, ] = NA
-    X = X[, !is.na(object@bhat)]
-    X %*% tcrossprod(object@V, X)
+    if (!is.null(hook <- object@misc$vcovHook)) {
+        if (is.character(hook)) 
+            hook = get(hook)
+        hook(object, tol = tol, ...)
+    }
+    else {
+        X = object@linfct
+        estble = is.estble(X, object@nbasis, tol) ###apply(X, 1, .is.estble, object@nbasis, tol)
+        X[!estble, ] = NA
+        X = X[, !is.na(object@bhat)]
+        X %*% tcrossprod(object@V, X)
+    }
 }
 
 
@@ -736,6 +807,37 @@ lsm.options = function(...) {
     if (is.null(x))  FALSE
     else if (is.logical(x))  x
     else FALSE
+}
+
+
+### Utility to change the internal structure of a ref.grid
+### Returned ref.grid object has linfct = I and bhat = estimates
+### Primary reason to do this is with transform = TRUE, then can 
+### work with linear functions of the transformed predictions
+regrid = function(object, transform = TRUE) {
+    est = .est.se.df(object, do.se = FALSE)
+    estble = !(is.na(est[[1]]))
+    object@V = vcov(object)[estble, estble, drop=FALSE]
+    object@bhat = est[[1]]
+    object@linfct = diag(1, length(estble))
+    if(all(estble))
+        object@nbasis = matrix(NA)
+    else
+        object@nbasis = object@linfct[, !estble, drop = FALSE]
+    if(transform && !is.null(object@misc$tran)) {
+        link = attr(est, "link")
+        D = diag(link$mu.eta(object@bhat[estble]))
+        object@bhat = link$linkinv(object@bhat)
+        object@V = D %*% tcrossprod(object@V, D)
+        inm = object@misc$inv.lbl
+        if (!is.null(inm))
+            object@misc$estName = inm
+        object@misc$tran = object@misc$inv.lbl = NULL
+    }
+    # Nix out things that are no longer needed or valid
+    object@grid$.offset. = object@misc$offset.mult =
+        object@misc$estHook = object@misc$vcovHook = NULL
+    object
 }
 
 
