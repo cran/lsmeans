@@ -2,8 +2,13 @@
 ### support for the ordinal package
 # (initial setup thanks to Maxime Herve, RVAideMemoire package)
 
-recover.data.clm = function(object, ...) {
-    if (is.null(object$S.terms) && is.null(object$nom.terms))
+recover.data.clm = function(object, mode = "latent", ...) {
+    if (!is.na(pmatch(mode, "scale"))) {
+        if (is.null(trms <- object$S.terms))
+            return("Specified mode=\"scale\", but no scale model is present") # ref.grid's error handler takes it from here
+        recover.data(object$call, trms, object$na.action, ...)
+    }
+    else if (is.null(object$S.terms) && is.null(object$nom.terms))
         recover.data.lm(object, ...)
     else { # bring-in predictors from loc, scale, and nom models
         trms = delete.response(object$terms)
@@ -28,10 +33,13 @@ recover.data.clmm = recover.data.lm
 #         'rescale' - (loc, scale) for linear transformation of latent result
 
 lsm.basis.clm = function (object, trms, xlev, grid, 
-                          mode = c("latent", "linear.predictor", "cum.prob", "prob"), 
+                          mode = c("latent", "linear.predictor", "cum.prob", "prob", "mean.class", "scale"), 
                           rescale = c(0,1), ...) {
     # general stuff
     mode = match.arg(mode)
+    if (mode == "scale")
+        return (.lsm.basis.clm.scale(object, trms, xlev, grid, ...))
+    
     if (is.null(object$contrasts))
         warning("Contrasts used to fit the model are unknown.\n",
                 "Defaulting to system option, but results may be wrong.")
@@ -44,7 +52,6 @@ lsm.basis.clm = function (object, trms, xlev, grid,
     if (is.null(cnm))
         cnm = paste(seq_len(nrow(tJac)), "|", 1 + seq_len(nrow(tJac)), sep = "")
     misc = list()
-    
     
     # My strategy is to piece together the needed matrices for each threshold parameter
     # Then assemble the results
@@ -168,6 +175,7 @@ lsm.basis.clm = function (object, trms, xlev, grid,
         bigX = cbind(bigNom, kronecker(-J, X))
         if (mode != "linear.predictor") {
             misc$mode = mode
+            misc$respName = as.character(object$terms)[2]
             misc$postGridHook = ".clm.postGrid"
         }
     }
@@ -186,15 +194,19 @@ lsm.basis.clm = function (object, trms, xlev, grid,
     if (mode == "cum.prob") {
         object = regrid(object)
     }
-    else { # mode == "prob"
+    else if (mode == "prob") {
         object = .clm.prob.grid(object)
     }
+    else { # mode == "mean.class
+        object = .clm.mean.class(object)
+    }
+    object@misc$respName = NULL
     object
 }
 
 
 # Make the linear-predictor ref.grid into one for class probabilities
-.clm.prob.grid = function(object, thresh = "cut", newname = "class") {
+.clm.prob.grid = function(object, thresh = "cut", newname = object@misc$respName) {
     byv = setdiff(names(object@levels), thresh)
     newrg = contrast(regrid(object, TRUE), ".diff_cum", by = byv)
     class(newrg) = "ref.grid"
@@ -206,6 +218,20 @@ lsm.basis.clm = function (object, trms, xlev, grid,
     names(newrg@levels)[1] = names(newrg@grid)[1] = newname
     newrg@roles = object@roles
     newrg@roles$multresp = newname
+    newrg
+}
+
+.clm.mean.class = function(object) {
+    prg = .clm.prob.grid(object, newname = "class")
+    byv = setdiff(names(prg@levels), "class")
+    lf = as.numeric(prg@levels$class)
+    newrg = contrast(prg, list(mean = lf), by = byv)
+    newrg = update(newrg, infer = c(FALSE, FALSE), 
+        pri.vars = NULL, by.vars = NULL, estName = "mean.class")
+    newrg@levels$contrast = newrg@grid$contrast = NULL
+    prg@roles$multresp = NULL
+    newrg@roles = prg@roles
+    class(newrg) = "ref.grid"
     newrg
 }
 
@@ -259,7 +285,26 @@ lsm.basis.clm = function (object, trms, xlev, grid,
     .clm.hook(object, tol)$V
 }
 
-
+### Special lsm.basis fcn for the scale model
+.lsm.basis.clm.scale = function(object, trms, xlev, grid, ...) {
+    m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
+    X = model.matrix(trms, m, contrasts.arg = object$S.contrasts)
+    bhat = c(`(intercept)` = 0, object$zeta)
+    nbasis = matrix(NA)
+    if (any(is.na(bhat))) {
+        mf = update(object, method = "model.frame")$mf
+        S = model.matrix(trms, mf, contrasts.arg = object$S.contrasts)
+        nbasis = nonest.basis(S)
+    }
+    k = sum(!is.na(bhat)) - 1
+    V = vcov(object)
+    pick = nrow(V) - k + seq_len(k)
+    V = V[pick, pick, drop = FALSE]
+    V = cbind(0, rbind(0,V))
+    misc = list(tran = "log")
+    list(X = X, bhat = bhat, nbasis = nbasis, V = V, 
+         dffun = function(...) NA, dfargs = list(), misc = misc)
+}
 
 lsm.basis.clmm = function (object, trms, xlev, grid, ...) {
     if(is.null(object$Hessian)) {

@@ -121,7 +121,7 @@ lsmeans.character.ref.grid = function(object, specs, by = NULL,
     facs = union(specs, by)
     
     # Figure out the structure of the grid
-    freq = RG@grid[[".freq."]]
+    wgt = RG@grid[[".wgt."]]
     dims = sapply(RG@levels, length)
     row.idx = array(seq_len(nrow(RG@linfct)), dims)
     use.mars = match(facs, names(RG@levels)) # which margins to use
@@ -130,28 +130,41 @@ lsmeans.character.ref.grid = function(object, specs, by = NULL,
     # Reconcile weights, if there are any margins left
     if ((length(avgd.mars) > 0) && !missing(weights)) {
         if (is.character(weights)) {
-            if (is.null(freq))
-                message("Frequency information not available -- deferring to fac.reduce")
+            if (is.null(wgt))
+                message("Weighting information not available -- deferring to fac.reduce")
             else {
-                wopts = c("equal","proportional","outer","cells","invalid")
+                wopts = c("equal","proportional","outer","cells","show.levels","invalid")
                 weights = switch(wopts[pmatch(weights, wopts, 5)],
                     equal = rep(1, prod(dims[avgd.mars])),
                     proportional = as.numeric(plyr::aaply(row.idx, avgd.mars,
-                                                          function(idx) sum(freq[idx]))),
+                                                          function(idx) sum(wgt[idx]))),
                     outer = {
                         ftbl = plyr::aaply(row.idx, avgd.mars,
-                                           function(idx) sum(freq[idx]), .drop = FALSE)
+                                           function(idx) sum(wgt[idx]), .drop = FALSE)
                         w = N = sum(ftbl)
                         for (d in seq_along(dim(ftbl)))
                             w = outer(w, plyr::aaply(ftbl, d, sum) / N)
                         as.numeric(w)
                     },
                     cells = "fq",
+                    show.levels = {
+                        cat("lsmeans are obtained by averaging over these factor combinations\n")
+                        return(do.call(expand.grid, RG@levels[avgd.mars]))
+                    },
                     invalid = stop("Invalid 'weights' option: '", weights, "'")
                 )
             }
         }
-        if (is.numeric(weights)) {
+        if (is.matrix(weights)) {
+            wtrow = 0
+            fac.reduce = function(coefs) {
+                wtmat = diag(weights[wtrow+1, ]) / sum(weights[wtrow+1, ])
+                ans = apply(wtmat %*% coefs, 2, sum)
+                wtrow <<- (1 + wtrow) %% nrow(weights)
+                ans
+            }
+        }
+        else if (is.numeric(weights)) {
             wtmat = diag(weights)
             wtsum = sum(weights)
             if (wtsum <= 1e-8) wtsum = NA
@@ -173,7 +186,7 @@ lsmeans.character.ref.grid = function(object, specs, by = NULL,
     combs = do.call("expand.grid", levs)
     if (!missing(weights) && (weights == "fq"))
         K = plyr::alply(row.idx, use.mars, function(idx) {
-            fq = RG@grid[[".freq."]][idx]
+            fq = RG@grid[[".wgt."]][idx]
             apply(diag(fq) %*% RG@linfct[idx, , drop=FALSE], 2, sum) / sum(fq)
         })
     else
@@ -195,10 +208,10 @@ lsmeans.character.ref.grid = function(object, specs, by = NULL,
     
     avgd.over = names(RG@levels[avgd.mars])
     
-    # Update .freq column of grid, if it exists
-    if (!is.null(freq)) {
-        combs[[".freq."]] = as.numeric(plyr::aaply(row.idx, use.mars, 
-            function(idx) sum(freq[idx])))
+    # Update .wgt column of grid, if it exists
+    if (!is.null(wgt)) {
+        combs[[".wgt."]] = as.numeric(plyr::aaply(row.idx, use.mars, 
+            function(idx) sum(wgt[idx])))
     }
     
     RG@roles$responses = character()
@@ -249,7 +262,7 @@ contrast.ref.grid = function(object, method = "eff", by, adjust, offset = NULL,
         options = getOption("lsmeans")$contrast, ...) {
     args = object@grid
     args[[".offset."]] = NULL 
-    args[[".freq."]] = NULL # ignore auxiliary stuff in labels, etc.
+    args[[".wgt."]] = NULL # ignore auxiliary stuff in labels, etc.
     if(missing(by)) 
         by = object@misc$by.vars
     if (!is.null(by)) {
@@ -321,9 +334,13 @@ contrast.ref.grid = function(object, method = "eff", by, adjust, offset = NULL,
     row.names(linfct) = NULL
     misc = object@misc
     misc$estName = "estimate"
+    if (!is.null(et <- attr(cmat, "type")))
+        misc$estType = et
+    else
+        misc$estType = "contrast"
     misc$methDesc = attr(cmat, "desc")
     misc$famSize = size=nrow(args)
-    misc$pri.vars = setdiff(names(grid), c(".offset.",".freq."))
+    misc$pri.vars = setdiff(names(grid), c(".offset.",".wgt."))
     if (missing(adjust)) adjust = attr(cmat, "adjust")
     if (is.null(adjust)) adjust = "none"
     if (!is.null(attr(cmat, "offset")))
@@ -368,6 +385,8 @@ contrast.ref.grid = function(object, method = "eff", by, adjust, offset = NULL,
 # return list of row indexes in tbl for each combination of by
 # tbl should be a data.frame
 .find.by.rows = function(tbl, by) {
+    if (is.null(by))
+        return(list(seq_len(nrow(tbl))))
     if (any(is.na(match(by, names(tbl)))))
         stop("'by' variables are not all in the grid")    
     bylevs = tbl[ , by, drop = FALSE]
@@ -395,8 +414,12 @@ test.ref.grid = function(object, null = 0,
 # if joint = FALSE, this is a courtesy method for 'contrast'
 # else it computes the F test or Wald test of H0: L*beta = null
 # where L = object@linfct    
-    if (!joint)
-        summary(object, infer=c(FALSE,TRUE), null = null, ...)
+    if (!joint) {
+        if (missing(by))
+            summary(object, infer=c(FALSE,TRUE), null = null, ...)
+        else
+            summary(object, infer=c(FALSE,TRUE), null = null, by = by, ...)
+    }
     else {
         if(verbose) {
             cat("Joint test of the following linear predictions\n")
@@ -455,9 +478,12 @@ test.ref.grid = function(object, null = 0,
 }
 
 # pairs method
-pairs.ref.grid = function(x, ...) {
+pairs.ref.grid = function(x, reverse = FALSE, ...) {
     object = x # for my sanity
-    contrast(object, method = "pairwise", ...)
+    if (reverse)
+        contrast(object, method = "revpairwise", ...)
+    else
+        contrast(object, method = "pairwise", ...)
 }
 
 
@@ -504,6 +530,15 @@ lstrends = function(model, specs, var, delta.var=.01*rng, data, ...) {
         newlf = (basis$X - RG@linfct) / diffl
     }
     
+    # remove transformation from object
+    .zaptran = function(obj) {
+        if (is(obj, "ref.grid") && !is.null(obj@misc$tran)) {
+            obj@misc$orig.tran = result@misc$tran
+            obj@misc$tran = NULL
+        }
+        obj
+    }
+    
     RG@linfct = newlf
     RG@roles$trend = var
     args = list(object=RG, specs=specs, ...)
@@ -513,19 +548,19 @@ lstrends = function(model, specs, var, delta.var=.01*rng, data, ...) {
         names(result)[1] = "lstrends"
         if (is(result[[1]], "ref.grid")) {
             result[[1]]@misc$estName = estName
+            result[[1]]@misc$estType = "prediction"
             result[[1]]@misc$methDesc = "trends"
+            for (i in seq_along(result))
+                result[[i]] = .zaptran(result[[i]])
         }
     }
     else {
         result@misc$estName = estName
+        result@misc$estType = "prediction"
         result@misc$methDesc = "trends"
+        result = .zaptran(result)
     }
     
-    # No transformation info here
-    if (!is.null(result@misc$tran)) {
-        result@misc$orig.tran = result@misc$tran
-        result@misc$tran = NULL
-    }
     
     result
 }
@@ -562,7 +597,7 @@ lsmobj = function(bhat, V, levels, linfct, df = NA, ...) {
         dffun = function(x, dfargs) dfargs$df
         dfargs = list(df = df)
     }
-    misc = list(estName = "estimate", infer = c(TRUE,FALSE), level = .95,
+    misc = list(estName = "estimate", estType = "prediction", infer = c(TRUE,FALSE), level = .95,
                 adjust = "none", famSize = nrow(linfct), 
                 avgd.over = character(0), pri.vars = names(grid),
                 methDesc = "lsmobj")

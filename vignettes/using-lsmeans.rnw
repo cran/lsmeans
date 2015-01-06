@@ -103,11 +103,13 @@ options(show.signif.stars=FALSE, prompt="R> ", continue="   ",
 
 
 \section{Introduction}
-Least-squares means (LS~means for short)  for a linear model are simply predictions---or averages thereof---over a regular grid of predictor settings which I call the \emph{reference grid}. They date back at least to 1976 when LS~means were incorporated in the contributed \SAS{} procedure named \code{HARVEY} \citep{Har76}. Later, they were incorporated via \code{LSMEANS} statements in the regular \SAS{} releases. 
+Least-squares means (LS~means for short)  for a linear model are simply predictions---or averages thereof---over a regular grid of predictor settings which I call the \emph{reference grid}. They date back at least to \cite{Har60} and his associated computer program \proglang{LSML} \citep{Har77} and the contributed \SAS{} procedure named \pkg{HARVEY} \citep{Har76}. Later, they were incorporated via \code{LSMEANS} statements for various linear model procedures such as \pkg{GLM} in the regular \SAS{} releases. See also \cite{Goo97} and \cite{SAS12} for more information about the \SAS{} implementation.
 
 In simple analysis-of-covariance models, LS~means are the same as covariate-adjusted means. In unbalanced factorial experiments, LS~means for each factor mimic the main-effects means but are adjusted for imbalance. The latter interpretation is quite similar to the ``unweighted means'' method for unbalanced data, as presented in old design books.
 
-LS~means are not always well understood, in part because the term itself is confusing. The most important things to remember are:
+LS~means are not always well understood, in part because the term itself is confusing. \cite{Sea80} discusses exactly how they are defined for various factorial, nested, and covariance models. \citeauthor{Sea80} suggest the term ``predicted marginal means'' (or PMMs) as a better descriptor. However, the term ``least-squares means'' was already well established in the \SAS{} software, and it has stuck.
+
+The most important things to remember are:
 \begin{itemize}
 \item LS~means are computed relative to a \emph{reference grid}.
 \item Once the reference grid is established, LS~means are simply predictions on this grid, or marginal averages of a table of these predictions.
@@ -157,14 +159,19 @@ These unadjusted means are not comparable with one another because they are affe
 Note that one may call "lsmeans" with either the reference grid or the model. If the model is given, then the first thing it does is create the reference grid; so if the reference grid is already available, as in this example, it's more efficient to make use of it.
 
 \subsection{Altering the reference grid}
-The "at" argument may be used to override defaults in the reference grid. The user may specify this argument either in a "ref.grid" call or an "lsmeans" call; and should specify a "list" with named sets of reference levels. Here is a silly example:
+The "at" argument may be used to override defaults in the reference grid.
+The user may specify this argument either in a "ref.grid" call or an "lsmeans" call; and should specify a "list" with named sets of reference levels. Here is a silly example:
 <<>>=
 lsmeans(oranges.lm1, "day", at = list(price1 = 50, 
     price2 = c(40,60), day = c("2","3","4")) )
 @
 Here, we restricted the results to three of the days, and used different prices.
 One possible surprise is that the predictions are averaged over the two "price2"
-values. That is because "price2" is no longer a single reference level, and we average over the levels of all factors not used to split-out the LS~means. This is probably not what we want. To get separate sets of predictions for each "price2", one must specify it as another factor or as a "by" factor in the "lsmeans" call (we will save the result for later discussion):
+values. That is because "price2" is no longer a single reference level, and we average over the levels of all factors not used to split-out the LS~means.
+This is probably not what we want.\footnote{%
+The \emph{default} reference grid produces LS~means exactly as described in \cite{Sea80}.
+However, an altered reference grid containing more than one value of a covariate, such as in this example, departs from (or generalizes, if you please) their definition by averaging with equal weights over those covariate levels. It is not a good idea here, but there is an example later in this vignette where it makes sense.}
+To get separate sets of predictions for each "price2", one must specify it as another factor or as a "by" factor in the "lsmeans" call (we will save the result for later discussion):
 <<>>=
 org.lsm <- lsmeans(oranges.lm1, "day", by = "price2", 
     at = list(price1 = 50, price2 = c(40,60), day = c("2","3","4")) )
@@ -244,9 +251,9 @@ Note that this preserves the "by" specification from before, and obtains the eff
 Another popular method is Dunnett-style contrasts, where a particular LS~mean is compared with each of the others. This is done using \dqt{trt.vs.ctrl}. In the following, we obtain (again) the LS~means for days, and compare each with the average of the LS~means on day~5 and~6.
 <<>>=
 days.lsm <- lsmeans(oranges.rg1, "day")
-contrast(days.lsm, "trt.vs.ctrl", ref = c(5,6))
+( days_contr.lsm <- contrast(days.lsm, "trt.vs.ctrl", ref = c(5,6)) )
 @
-For convenience, \dqt{trt.vs.ctrl1} and \dqt{trt.vs.ctrlk} methods are provided for use in lieu of "ref" for comparing with the first and the last LS~means.
+For convenience, \dqt{trt.vs.ctrl1} and \dqt{trt.vs.ctrlk} methods are provided for use in lieu of "ref" for comparing with the first and the last LS~means. The \dqt{dunnettx} adjustment is a good approximation to the exact Dunnett $P$~value adjustment. If the exact adjustment is desired, use "adjust = "\dqt{mvt}; but this can take a lot of computing time when there are several tests.
 
 Note that by default, "lsmeans" results are displayed with confidence intervals while "contrast" results are displayed with $t$ tests. One can easily override this; for example,
 <<eval=FALSE>>=
@@ -313,28 +320,33 @@ There is little evidence of variety differences, nor that these differences vary
 
 
 \section[Interfacing with multcomp]{Interfacing with \pkg{multcomp}}
-The \pkg{multcomp} package \citep{multc} supports more exacting corrections for simultaneous inference than are available in \lsm{}. Its "glht" (general linear hypothesis testing) function and associated \dqt{glht} class are similar in some ways to "lsmeans" and \dqt{lsmobj} objects, respectively. So we provide methods such as "as.glht" for working with "glht" so as to obtain ``exact'' inferences. To illustrate, let's compare some simultaneous confidence intervals using the two packages. 
-%%%\begin{multicols}{2}\small
-First, using a Bonferroni correction on the LS~means for "day" in the "oranges" model:
-<<>>=
-confint(days.lsm, adjust = "bon")
+The \pkg{multcomp} package \citep{multc} supports more options for simultaneous inference than are available in \lsm{}. Its "glht" (general linear hypothesis testing) function and associated \dqt{glht} class are similar in some ways to "lsmeans" and \dqt{lsmobj} objects, respectively. So \lsm{} provides an "as.glht" function to do the conversion.
+
+To illustrate, let us convert the "days_contr.lsm" object (produced earlier) to a "glht" object, and use it to obtain adjusted $P$~values under Westfall's adjustment procedure (not available in \lsm{}):
+<<echo = FALSE, results = hide>>=
+# Ensure we see the same results each time
+set.seed(123454321)
 @
-%%%\columnbreak
-And now using \pkg{multcomp}:
 <<>>=
 library("multcomp")
-confint(as.glht(days.lsm))
+days.glht <- as.glht(days_contr.lsm)
+summary(days.glht, test = adjusted("Westfall"))
 @
-%%%\end{multicols}
-The latter intervals are somewhat narrower, which is expected since the Bonferroni method is conservative.
-
-The \lsm{} package also provides an "lsm" function that can be called as the second argument of "glht":
-<<>>=
-summary(glht(oranges.lm1, lsm("day", contr="eff")), 
-        test = adjusted("free"))
+In addition, \lsm{} provides an "lsm" function that may be called from within a call to "glht". Thus, another way to obtain the same "glht" object is to use
+<<eval = FALSE>>=
+days.glht1 <- glht(oranges.lm1, 
+                   lsm("day", contr = "trt.vs.ctrl", ref = c(5,6)))
 @
 
-An additional detail: If there is a "by" variable in effect, "glht" or "as.glht" returns a "list" of "glht" objects---one for each "by" level. There is a courtesy "summary" method for this \dqt{glht.list} class to make things a bit more user-friendly. Recall the earlier example result "org.lsm", which contains information for LS~means for three "day"s at each of two values of "price2". Suppose we are interested in pairwise comparisons of these LS~means, by "price2". If we call
+By the way, the following two statements will produce the same results:
+<<eval = FALSE>>=
+summary(days_contr.lsm, adjust = "mvt")
+summary(days.glht)
+@
+That is, the \dqt{mvt} adjust method in \lsm{} is the same as the default single-step $P$~value adjustment in \pkg{multcomp}.
+
+
+One additional detail: If there is a "by" variable in effect, "glht" or "as.glht" returns a "list" of "glht" objects---one for each "by" level. There is a courtesy "summary" method for this \dqt{glht.list} class to make things a bit more user-friendly. Recall the earlier example result "org.lsm", which contains information for LS~means for three "day"s at each of two values of "price2". Suppose we are interested in pairwise comparisons of these LS~means, by "price2". If we call
 <<eval=FALSE>>=
 summary(as.glht(pairs(org.lsm)))
 @
@@ -384,7 +396,8 @@ Remember that "nitro" is now used as a quantitative predictor. But for comparing
 Oats.lsm2 <- lsmeans(Oats.lmer2, ~ nitro | Variety, cov.reduce = FALSE)
 Oats.lsm2
 @
-These LS~means follow the same quadratic trend for each variety, but with different intercepts.
+These LS~means follow the same quadratic trend for each variety, but with different intercepts.\footnote{%
+This is the promised example where our generalization of \cite{Sea80}'s definition of LS~means makes sense. Suppose we want to compare the LS~means for \code{Variety} with those in the original model \code{Oats.lmer} where \code{nitro} was a factor, we want to average equally over the four \code{nitro} levels, even though \code{nitro} is a covariate in this second model.}
 
 Fractional degrees of freedom are displayed in these results. These are obtained from the \pkg{pbkrtest} package \citep{pbkrt}, and they use the Kenward-Rogers method. (The degrees of freedom for the polynomial contrasts were also obtained from \pkg{pbkrtest}, but the results turn out to be integers.)
 
@@ -480,6 +493,7 @@ We find strong evidence that, with the stated threshold of .25, Golden Rain is n
 \section{Trends}
 The \lsm{} package provides a function \code{lstrends} for estimating and comparing the slopes of fitted lines (or curves). To illustrate, consider the built-in R dataset \code{ChickWeight} which has data on the growths of newly hatched chicks under four different diets. The following code produces the display in \Fig{chick-plot}.
 <<chick-plot, fig=TRUE, include=FALSE, height=3.5, width=8>>=
+require("lattice")
 xyplot(weight~Time | Diet, groups = ~ Chick, data=ChickWeight, type="o", 
        layout=c(4,1))
 @
@@ -576,7 +590,7 @@ The general conclusion from these analyses is that for age groups 2 and~3, the e
 Note that this analysis is somewhat different than the results we would obtain by subsetting the data before analysis, as we are borrowing information from the other observations in estimating and testing these LS~means.
 
 \subsection{More on weighting}\label{weights}
-The "weights" argument can be a vector of numerical weights (it has to be of the right length), or one of four text values: \dqt{equal} (weight the predictions equally when averaging them, the default), \dqt{proportional} (weight them proportionally to the observed frequencies of the factor combinations being averaged over), \dqt{outer} (weight according to the outer products of the one-factor marginal counts), or \dqt{cells} (weight each mean differently, according to the frequencies of the predictions being averaged). \Fig{wtcomp} shows the LS~means for "race" using the four different weighting schemees.
+The "weights" argument can be a vector of numerical weights (it has to be of the right length), or one of four text values: \dqt{equal} (weight the predictions equally when averaging them, the default), \dqt{proportional} (weight them proportionally to the observed frequencies of the factor combinations being averaged over), \dqt{outer} (weight according to the outer products of the one-factor marginal counts), or \dqt{cells} (weight each mean differently, according to the frequencies of the predictions being averaged). \Fig{wtcomp} shows the LS~means for "race" using the four different weighting schemes. (Note: If the model itself has weights, then the total weights are used instead of counts.)
 \begin{figure}
 \hspace{-.06\linewidth}
 \begin{minipage}{1.12\linewidth}

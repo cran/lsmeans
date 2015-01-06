@@ -1,5 +1,33 @@
 Changelog for 'lsmeans' package
 
+2.14
+    Model weights are now used instead of frequencies when weights 
+        are not "equal"
+    Fixed error in 'lstrends' when 'specs' is two-sided formula
+    Added more/better references for LS means
+    Yet more enhancements for for clm, clmm, polr...
+        "mean.class" mode, uses response name for "prob" mode
+        "scale" mode does lsmeans for estimated log-scale
+    Enhancements to 'weights' argument in 'lsmeans':
+        - May now provide a matrix - it cycles through its rows
+        - weights = "show.levels" shows the factor comb's averaged
+    Added 'reverse' option to 'pairs'
+    Added 'type' argument in 'ref.grid' for convenience
+    Fixed some errors/omissions in documentation of 'update'
+    One-sided 'tail' spec now applies to CIs as well as tests
+    New adjustment methods added:
+        "mvt" provides exact one-step methods like Tukey, Dunnett
+        "dunnettx" is approximate and only available for 2-sided cases
+    Added contrast fcns "tukey" and "dunnett" - these are pseudonyms
+        for "pairwise" and "trt.vs.ctrl" resp.
+    More adjustments are available for confidence intervals
+    Tries harder to use only appropriate adjust methods
+    New 'estType' attribute for 'update' related to the above
+    'cld' accommodates when 'multcompView' isn't installed, thus
+        can still pass checks without that package
+    Removed .old.lsmeans and associated vignette
+
+
 2.13
     Provides for equivalence, noninferiority, etc. tests via
         'side' and 'delta' arguments in 'summary' or 'test'. Also

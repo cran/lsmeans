@@ -41,21 +41,25 @@ A character vector specifying the names of predictors to condition on.}
 \item{fac.reduce}{
 A function that combines the rows of a matrix into a single vector. This implements the ``marginal averaging'' aspect of least-squares means. The default is the mean of the rows. Typically if it is overridden, it would be some kind of weighted mean of the rows. If \code{fac.reduce} is nonlinear, bizarre results are likely, and LS means will not be interpretable. If the \code{weights} argument is non-missing, \code{fac.reduce} is ignored.}
 \item{contr}{
-A \code{list} of contrast coefficients to apply to the least-squares means -- or the root name of an \code{.lsmc} function that returns such coefficients. In addition, \code{contr = "cld"} is an alternative way to invoke the \code{\link[lsmeans]{cld}} function. See \code{\link{contrast}} for more details on contrasts.
+A \code{list} of contrast coefficients to apply to the least-squares means -- or the root name of an \code{.lsmc} function that returns such coefficients. In addition, \code{contr = "cld"} is an alternative way to invoke the \code{\link[lsmeans]{cld}} function. See \code{\link{contrast}} for more details on contrasts. NOTE: \code{contr} is ignored when \code{specs} is a formula.
 }
 \item{contr.list}{
 A named \code{list} of \code{list}s of contrast coefficients, as for \code{contr}. This is used only in the formula method; see Details below. 
 }
 \item{options}{If non-\code{NULL}, a named \code{list} of arguments to pass to \code{\link{update}}, just after the object is constructed.}
 \item{weights}{
-Numeric vector of weights to use in averaging predictions (must equal the number of predictions to be averaged). Alternatively, the user may specify a string that partially matches one of the following:
+Numeric vector, numeric matrix, or character string specifying weights to use in averaging predictions. If a vector, its length must equal the number of predictions to be averaged to obtain each least-squares mean. If a matrix, each row of the matrix is used in turn, wrapping back to the first row as needed.  When in doubt about what is being averaged (or how many), first call with \code{weights = "show.levels"}.)
+
+If a string, it should partially match one of the following:
 \describe{
 \item{\code{"equal"}}{Use an equally weighted average.}
 \item{\code{"proportional"}}{Weight in proportion to the frequencies (in the original data) of the factor combinations that are averaged over.}
 \item{\code{"outer"}}{Weight in proportion to each individual factor's marginal frequencies. Thus, the weights for a combination of factors are the outer product of the one-factor margins}
 \item{\code{"cells"}}{Weight according to the frequencies of the cells being averaged.}
+\item{\code{show.levels}}{This is a convenience feature for understanding what is being averaged over. Instead of a table of LS means, this causes the function to return a table showing the levels that are averaged over, in the order they appear.}
 }
 Outer weights are like the 'expected' counts in a chi-square test of independence, and will yield the same results as those obtained by proportional averaging with one factor at a time. All except \code{"cells"} uses the same set of weights for each mean. In a model where the predicted values are the cell means, cell weights will yield the raw averages of the data for the factors involved.
+Note: If weights were used in fitting the model, then weight totals are used in place of frequencies in these schemes.
 
 If \code{weights} is used, \code{fac.reduce} is ignored. 
 }
@@ -99,7 +103,8 @@ The function \code{lsmobj} may be used to construct an object just like one retu
 An object of class \code{\link[=lsmobj-class]{lsmobj}} -- except when \code{specs} is a \code{list} or a \code{formula} having a left-hand side, a \code{list} of \code{slmobj} objects. A number of methods are provided for further analysis, including \code{\link[lsmeans]{summary}}, \code{\link[lsmeans]{confint}}, \code{\link[lsmeans]{test}}, \code{\link[lsmeans]{contrast}}, \code{\link[lsmeans]{pairs}}, and \code{\link[lsmeans]{cld}}.
 }
 
-\note{For a \code{ref.grid} or \code{lsmobj} object created in \pkg{lsmeans} version 2.10 or earlier, the frequency information needed by the \code{weights} argument is not present; so a message is displayed and averaging is done using \code{fac.reduce}.}
+\note{For a \code{ref.grid} or \code{lsmobj} object created in \pkg{lsmeans} version 2.10 or earlier, the information needed by the \code{weights} argument is not present; so a message is displayed and averaging is done using \code{fac.reduce}.}
+
 
 \references{
 SAS Institute Inc. (2012)
@@ -149,7 +154,16 @@ Oatsq.lme <- update(Oats.lme, . ~ nitro + I(nitro^2) + Variety)
 # Predictions at each unique 'nitro' value in the dataset
 lsmeans(Oatsq.lme, ~ nitro, cov.reduce = FALSE)
 
-# Trends
+### Weights
+# See what's being averaged over in the above
+lsmeans(Oatsq.lme, ~ nitro, cov.reduce = FALSE, weights = "show.levels")
+
+# Give three times the weight to Marvellous
+lsmeans(Oatsq.lme, ~ nitro, cov.reduce = FALSE, 
+    weights = c(1,3,1))
+
+
+### Trends
 fiber.lm <- lm(strength ~ diameter*machine, data=fiber)
 # Obtain slopes for each machine ...
 ( fiber.lst <- lstrends(fiber.lm, "machine", var="diameter") )

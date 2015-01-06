@@ -62,11 +62,6 @@ lsm.basis.default = function(object, trms, xlev, grid, ...) {
 # then strips that off leaving extensions
 .show_supported = function(ns = "lsmeans", meth = "lsm.basis") {
     "Use help(\"models\", package = \"lsmeans\") for information on supported models."
-#     pat = paste(meth, ".", sep="")
-#     objs = ls(envir = getNamespace(ns), pattern = pat)
-#     clss = gsub(pat, "", objs)
-#     c("Objects of the following classes are supported:\n",
-#       paste(dQuote(setdiff(clss, "default")), collapse = ", "))
 }
 
 
@@ -84,7 +79,7 @@ recover.data.call = function(object, trms, na.action, data, ...) {
 #         m = match(c("formula", "data", "subset", "weights", 
 #                      "na.action", "offset"), names(fcall), 0L)
 # I think we don't need to match some of these just to recover the data        
-        m = match(c("formula", "data", "subset"), names(fcall), 0L)
+        m = match(c("formula", "data", "subset", "weights"), names(fcall), 0L)
         fcall = fcall[c(1L, m)]
         fcall$drop.unused.levels = TRUE
         fcall[[1L]] = as.name("model.frame")
@@ -321,7 +316,7 @@ lsm.basis.gls = function(object, trms, xlev, grid, ...) {
 recover.data.polr = recover.data.lm
 
 lsm.basis.polr = function(object, trms, xlev, grid, 
-                          mode = c("latent", "linear.predictor", "cum.prob", "prob"), 
+                          mode = c("latent", "linear.predictor", "cum.prob", "prob", "mean.class"), 
                           rescale = c(0,1), ...) {
     mode = match.arg(mode)
     contrasts = object$contrasts
@@ -348,10 +343,12 @@ lsm.basis.polr = function(object, trms, xlev, grid,
         misc = list(ylevs = list(cut = names(object$zeta)), 
                     tran = link, inv.lbl = "cumprob", offset.mult = -1)
         if (mode != "linear.predictor") {
+            # just use the machinery we already have for the 'ordinal' package
             misc$mode = mode
             misc$postGridHook = ".clm.postGrid"
         }
     }
+    misc$respName = as.character(terms(object))[2]
     nbasis = matrix(NA)
     dffun = function(...) NA
     list(X=X, bhat=bhat, nbasis=nbasis, V=V, dffun=dffun, dfargs=list(), misc=misc)

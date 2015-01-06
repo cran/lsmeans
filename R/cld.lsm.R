@@ -1,8 +1,10 @@
 # Runs the function multicompLetters from the multcompView package
 # returns an error if not installed
 .mcletters = function(..., Letters=c("1234567890",LETTERS,letters)) {
-    if(!requireNamespace("multcompView", quietly = TRUE))
-        stop("The 'multcompView' package must be installed to use cld methods")
+    if(!requireNamespace("multcompView", quietly = TRUE)) {
+        message("The 'multcompView' package must be installed to use cld methods")
+        return (list(monospacedLetters = "?"))
+    }
     
     # Expand strings to individual letters
     Letters = as.character(unlist(sapply(Letters, function(stg) {
@@ -13,15 +15,6 @@
     if (is.null(result$monospacedLetters))
         result$monospacedLetters = result$Letters
     result
-}
-
-# If multcomp not installed, define my own generic for cld
-# (It is exported in the NAMESPACE file under the same cond)
-if(!requireNamespace("multcomp", quietly = TRUE)) {
-    
-    cld <- function(object, ...)
-        UseMethod("cld")
-    
 }
 
 # S3 method for ref.grid
