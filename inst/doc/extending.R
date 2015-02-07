@@ -94,11 +94,11 @@ lsmeans(fake.lts, ~ B | A)
 ###################################################
 ### code chunk number 13: extending.rnw:147-148 (eval = FALSE)
 ###################################################
-## nbasis = nonest.basis(Xmat)
+## nbasis = estimability::nonest.basis(Xmat)
 
 
 ###################################################
-### code chunk number 14: extending.rnw:157-166
+### code chunk number 14: extending.rnw:159-168
 ###################################################
 lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
@@ -112,7 +112,7 @@ lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
 
 
 ###################################################
-### code chunk number 15: extending.rnw:169-170
+### code chunk number 15: extending.rnw:171-172
 ###################################################
 lsmeans(fake.lts, pairwise ~ B)
 

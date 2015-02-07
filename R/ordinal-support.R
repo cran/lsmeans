@@ -33,7 +33,7 @@ recover.data.clmm = recover.data.lm
 #         'rescale' - (loc, scale) for linear transformation of latent result
 
 lsm.basis.clm = function (object, trms, xlev, grid, 
-                          mode = c("latent", "linear.predictor", "cum.prob", "prob", "mean.class", "scale"), 
+                          mode = c("latent", "linear.predictor", "cum.prob", "exc.prob", "prob", "mean.class", "scale"), 
                           rescale = c(0,1), ...) {
     # general stuff
     mode = match.arg(mode)
@@ -102,7 +102,7 @@ lsm.basis.clm = function (object, trms, xlev, grid,
         S = NULL
     
     ### ----- Get non-estimability basis ----- ###
-    nbasis = snbasis = matrix(NA)
+    nbasis = snbasis = estimability::all.estble
     if (any(is.na(bhat))) {
         #####mm = model.matrix(object)
         # workaround to fact that model.matrix doesn't get the contrasts right...
@@ -117,7 +117,7 @@ lsm.basis.clm = function (object, trms, xlev, grid,
                 mmNOM = model.matrix(object$nom.terms, data = mf, contrasts.arg = object$nom.contrasts)
                 NOMX = cbind(mmNOM, mm$X[, -1])
             }
-            nbasis = nonest.basis(NOMX)
+            nbasis = estimability::nonest.basis(NOMX)
             # replicate and reverse the sign of the NOM parts
             nomcols = seq_len(ncol(NOM))
             nbasis = apply(nbasis, 2, function(x)
@@ -127,7 +127,7 @@ lsm.basis.clm = function (object, trms, xlev, grid,
             if (any(is.na(object$zeta))) {
                 ####snbasis = nonest.basis(mm$S)
                 mmS = model.matrix(object$S.terms, data = mf, contrasts.arg = object$S.contrasts)
-                snbasis = nonest.basis(mmS)
+                snbasis = estimability::nonest.basis(mmS)
                 # put intercept part at end
                 snbasis = rbind(snbasis[-1, , drop=FALSE], snbasis[1, ])
                 if (!is.null(attr(object$S.terms, "offset")))
@@ -191,24 +191,32 @@ lsm.basis.clm = function (object, trms, xlev, grid,
 .clm.postGrid = function(object) {
     mode = object@misc$mode
     object@misc$postGridHook = object@misc$mode = NULL
-    if (mode == "cum.prob") {
-        object = regrid(object)
+    object = regrid(object, TRUE)
+    if(object@misc$estName == "exc.prob") { # Exceedance probs
+        object@bhat = 1 - object@bhat
+        object@misc$estName = "cum.prob"
     }
-    else if (mode == "prob") {
+    if (mode == "prob") {
         object = .clm.prob.grid(object)
     }
-    else { # mode == "mean.class
+    else if (mode == "mean.class") {
         object = .clm.mean.class(object)
     }
+    else if (mode == "exc.prob") {
+        object@bhat = 1 - object@bhat
+        object@misc$estName = "exc.prob"        
+    }
+    # (else mode == "cum.prob" and it's all OK)
     object@misc$respName = NULL
     object
 }
 
 
 # Make the linear-predictor ref.grid into one for class probabilities
+# This assumes that object has already been re-gridded and back-transformed
 .clm.prob.grid = function(object, thresh = "cut", newname = object@misc$respName) {
     byv = setdiff(names(object@levels), thresh)
-    newrg = contrast(regrid(object, TRUE), ".diff_cum", by = byv)
+    newrg = contrast(object, ".diff_cum", by = byv)
     class(newrg) = "ref.grid"
     misc = newrg@misc
     misc$infer = c(FALSE,FALSE)
@@ -262,7 +270,7 @@ lsm.basis.clm = function (object, trms, xlev, grid,
     active = !is.na(bhat)
     bhat[!active] = 0
     linfct = object@linfct
-    estble = is.estble(linfct, object@nbasis, tol) ###apply(linfct, 1, .is.estble, object@nbasis, tol)
+    estble = estimability::is.estble(linfct, object@nbasis, tol) ###apply(linfct, 1, .is.estble, object@nbasis, tol)
     estble[!estble] = NA
     rsigma = estble * as.numeric(linfct[, scols, drop = FALSE] %*% object@bhat[scols])
     rsigma = exp(rsigma) * estble
@@ -290,11 +298,11 @@ lsm.basis.clm = function (object, trms, xlev, grid,
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = object$S.contrasts)
     bhat = c(`(intercept)` = 0, object$zeta)
-    nbasis = matrix(NA)
+    nbasis = estimability::all.estble
     if (any(is.na(bhat))) {
         mf = update(object, method = "model.frame")$mf
         S = model.matrix(trms, mf, contrasts.arg = object$S.contrasts)
-        nbasis = nonest.basis(S)
+        nbasis = estimability::nonest.basis(S)
     }
     k = sum(!is.na(bhat)) - 1
     V = vcov(object)

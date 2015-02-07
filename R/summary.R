@@ -9,19 +9,20 @@
 }
 
 # utility to check estimability of x'beta, given nonest.basis
-is.estble = function(x, nbasis, tol=1e-8) {
-    if (is.matrix(x))
-        return(apply(x, 1, is.estble, nbasis, tol))
-    if(is.na(nbasis[1]))
-        TRUE
-    else {
-        chk = as.numeric(crossprod(nbasis, x))
-        ssqx = sum(x*x) # BEFORE subsetting x
-        # If x really small, don't scale chk'chk
-        if (ssqx < tol) ssqx = 1
-        sum(chk*chk) < tol * ssqx
-    }
-}
+### Moved this to separate 'estimability' package
+# is.estble = function(x, nbasis, tol=1e-8) {
+#     if (is.matrix(x))
+#         return(apply(x, 1, is.estble, nbasis, tol))
+#     if(is.na(nbasis[1]))
+#         TRUE
+#     else {
+#         chk = as.numeric(crossprod(nbasis, x))
+#         ssqx = sum(x*x) # BEFORE subsetting x
+#         # If x really small, don't scale chk'chk
+#         if (ssqx < tol) ssqx = 1
+#         sum(chk*chk) < tol * ssqx
+#     }
+# }
 
 # utility fcn to get est's, std errors, and df
 # new arg: do.se -- if FALSE, just do the estimates and return 0 for se and df
@@ -42,7 +43,7 @@ is.estble = function(x, nbasis, tol=1e-8) {
         active = which(!is.na(object@bhat))
         bhat = object@bhat[active]
         result = t(apply(object@linfct, 1, function(x) {
-            if (is.estble(x, object@nbasis, tol)) {
+            if (estimability::is.estble(x, object@nbasis, tol)) {
                 x = x[active]
                 est = sum(bhat * x)
                 if(do.se) {
@@ -98,8 +99,7 @@ is.estble = function(x, nbasis, tol=1e-8) {
     # (produces right Scheffe CV; Tukey ones are a bit strange)
     fam.size = fam.info[1]
     n.contr = fam.info[2]
-    if (fam.info[3] == 1) # when not contrasts, we bump up num. df for scheffe
-        fam.size = n.contr + 1
+    scheffe.dim = ifelse(fam.info[3] == 1, fam.size, fam.size - 1)
     abst = abs(t)
     if (tail == 0)
         unadj.p = 2*pt(abst, df, lower.tail=FALSE)
@@ -117,19 +117,22 @@ is.estble = function(x, nbasis, tol=1e-8) {
                        sidak = 1 - (1 - unadj.p)^n.contr,
                        # NOTE: tukey, scheffe, dunnettx all assumed 2-sided!
                        tukey = ptukey(sqrt(2)*abst, fam.size, zapsmall(df), lower.tail=FALSE),
-                       scheffe = pf(t^2/(fam.size-1), fam.size-1, df, lower.tail=FALSE),
+                       scheffe = pf(t^2/scheffe.dim, scheffe.dim, df, lower.tail=FALSE),
                        dunnettx = 1 - .pdunnx(abst, n.contr, df),
                        mvt = 1 - .my.pmvt(t, df, corrmat, -tail) # tricky - reverse the tail because we're subtracting from 1 
-    )
-    if (fam.info[3] == 1) # for labeling purposes
-        fam.size = fam.size - 1
+                )
     chk.adj = match(adjust, c("none", "tukey", "scheffe"), nomatch = 99)
     do.msg = (chk.adj > 1) && (n.contr > 1) && 
         !((fam.size == 2) && (chk.adj < 10)) 
     if (do.msg) {
-        xtra = if(chk.adj < 10) paste("a family of", fam.size, "tests")
-        else             paste(n.contr, "tests")
-        mesg = paste("P value adjustment:", adjust, "method for", xtra)
+#         xtra = if(chk.adj < 10) paste("a family of", fam.size, "tests")
+#         else             paste(n.contr, "tests")
+        xtra = switch(adjust, 
+                      tukey = paste("for comparing a family of", fam.size, "tests"),
+                      scheffe = paste("with dimensionality", scheffe.dim),
+                      paste("for", n.contr, "tests")
+                )
+        mesg = paste("P value adjustment:", adjust, "method", xtra)
     }
     else mesg = NULL
     list(pval=pval, mesg=mesg, adjust=adjust)
@@ -160,19 +163,21 @@ is.estble = function(x, nbasis, tol=1e-8) {
     
     fam.size = fam.info[1]
     n.contr = fam.info[2]
-    if (fam.info[3] == 1) 
-        fam.size = n.contr + 1
+    scheffe.dim = ifelse(fam.info[3] == 1, fam.size, fam.size - 1)
     
     chk.adj = match(adjust, c("none", "tukey", "scheffe"), nomatch = 99)
     do.msg = (chk.adj > 1) && (n.contr > 1) && 
         !((fam.size == 2) && (chk.adj < 10)) 
-    if (fam.info[3] == 1) # for labeling purposes
-        fam.size = fam.size - 1
     
     if (do.msg) {
-        xtra = if(chk.adj < 10) paste("a family of", fam.size, "estimates")
-        else             paste(n.contr, "estimates")
-        mesg = paste("Confidence-level adjustment:", adjust, "method for", xtra)
+#        xtra = if(chk.adj < 10) paste("a family of", fam.size, "estimates")
+#        else             paste(n.contr, "estimates")
+        xtra = switch(adjust, 
+                      tukey = paste("for comparing a family of", fam.size, "estimates"),
+                      scheffe = paste("with dimensionality", scheffe.dim),
+                      paste("for", n.contr, "estimates")
+        )
+        mesg = paste("Conf-level adjustment:", adjust, "method", xtra)
     }
     
     adiv = ifelse(tail == 0, 2, 1) # divisor for alpha where needed
@@ -182,7 +187,7 @@ is.estble = function(x, nbasis, tol=1e-8) {
                 sidak = -qt((1 - level^(1/n.contr))/adiv, df),
                 bonferroni = -qt((1-level)/n.contr/adiv, df),
                 tukey = qtukey(level, fam.size, df) / sqrt(2),
-                scheffe = sqrt((fam.size - 1) * qf(level, fam.size - 1, df)),
+                scheffe = sqrt(scheffe.dim * qf(level, scheffe.dim, df)),
                 dunnettx = .qdunnx(level, n.contr, df),
                 mvt = .my.qmvt(level, df, corrmat, tail)
     )

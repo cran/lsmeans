@@ -257,7 +257,7 @@ lsmeans.character.ref.grid = function(object, specs, by = NULL,
 ### 'contrast' S3 generic and method
 contrast = function(object, ...)
     UseMethod("contrast")
-              
+
 contrast.ref.grid = function(object, method = "eff", by, adjust, offset = NULL,
         options = getOption("lsmeans")$contrast, ...) {
     args = object@grid
@@ -336,10 +336,12 @@ contrast.ref.grid = function(object, method = "eff", by, adjust, offset = NULL,
     misc$estName = "estimate"
     if (!is.null(et <- attr(cmat, "type")))
         misc$estType = et
-    else
-        misc$estType = "contrast"
+    else {
+        is.con = all(abs(sapply(cmat, sum)) < .001)
+        misc$estType = ifelse(is.con, "contrast", "prediction")
+    }
     misc$methDesc = attr(cmat, "desc")
-    misc$famSize = size=nrow(args)
+    misc$famSize = size = nrow(args)
     misc$pri.vars = setdiff(names(grid), c(".offset.",".wgt."))
     if (missing(adjust)) adjust = attr(cmat, "adjust")
     if (is.null(adjust)) adjust = "none"
@@ -603,7 +605,7 @@ lsmobj = function(bhat, V, levels, linfct, df = NA, ...) {
                 methDesc = "lsmobj")
     result = new("lsmobj", model.info=model.info, roles=roles, grid=grid,
                  levels = levels, matlevs=list(),
-                 linfct=linfct, bhat=bhat, nbasis=matrix(NA), V=V,
+                 linfct=linfct, bhat=bhat, nbasis=all.estble, V=V,
                  dffun=dffun, dfargs=dfargs, misc=misc)
     update(result, ..., silent=TRUE)
 }

@@ -1,5 +1,13 @@
 Changelog for 'lsmeans' package
 
+2.15
+    Clarified annotations for Tukey and Scheffe-adjusted summaries
+    Moved estimability code to a separate 'estmability' package
+    Basic support for model objects in rms package
+    Explicit non-support for gam (previously ran due to 
+        inheritance, but produced the wrong results!)
+
+
 2.14
     Model weights are now used instead of frequencies when weights 
         are not "equal"
