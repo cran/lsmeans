@@ -58,19 +58,19 @@ head(rec.fake)
 
 
 ###################################################
-### code chunk number 9: extending.rnw:107-108
+### code chunk number 9: extending.rnw:109-110
 ###################################################
 args(lsmeans:::lsm.basis.lm)
 
 
 ###################################################
-### code chunk number 10: extending.rnw:115-116
+### code chunk number 10: extending.rnw:117-118
 ###################################################
 MASS:::predict.lqs
 
 
 ###################################################
-### code chunk number 11: extending.rnw:120-131
+### code chunk number 11: extending.rnw:122-133
 ###################################################
 lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
@@ -86,19 +86,19 @@ lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
 
 
 ###################################################
-### code chunk number 12: extending.rnw:135-136
+### code chunk number 12: extending.rnw:137-138
 ###################################################
 lsmeans(fake.lts, ~ B | A)
 
 
 ###################################################
-### code chunk number 13: extending.rnw:147-148 (eval = FALSE)
+### code chunk number 13: extending.rnw:149-150 (eval = FALSE)
 ###################################################
 ## nbasis = estimability::nonest.basis(Xmat)
 
 
 ###################################################
-### code chunk number 14: extending.rnw:159-168
+### code chunk number 14: extending.rnw:161-170
 ###################################################
 lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
@@ -112,7 +112,7 @@ lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
 
 
 ###################################################
-### code chunk number 15: extending.rnw:171-172
+### code chunk number 15: extending.rnw:173-174
 ###################################################
 lsmeans(fake.lts, pairwise ~ B)
 

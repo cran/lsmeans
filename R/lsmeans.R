@@ -259,7 +259,7 @@ contrast = function(object, ...)
     UseMethod("contrast")
 
 contrast.ref.grid = function(object, method = "eff", by, adjust, offset = NULL,
-        options = getOption("lsmeans")$contrast, ...) {
+        name = "contrast", options = getOption("lsmeans")$contrast, ...) {
     args = object@grid
     args[[".offset."]] = NULL 
     args[[".wgt."]] = NULL # ignore auxiliary stuff in labels, etc.
@@ -325,9 +325,10 @@ contrast.ref.grid = function(object, method = "eff", by, adjust, offset = NULL,
     
     # Rename the .contrast. column -- ordinarily to "contrast",
     # but otherwise a unique variation thereof
-    n.prev.con = length(grep("^contrast[0-9]?", names(grid)))
+    con.pat = paste("^", name, "[0-p]?", sep = "")
+    n.prev.con = length(grep(con.pat, names(grid)))
     con.col = grep("\\.contrast\\.", names(grid))
-    con.name = paste("contrast", 
+    con.name = paste(name, 
                      ifelse(n.prev.con == 0, "", n.prev.con), sep="")
     names(grid)[con.col] = con.name
     
@@ -519,6 +520,11 @@ lstrends = function(model, specs, var, delta.var=.01*rng, data, ...) {
     
     RG = ref.grid(model, ...)
     grid = RG@grid
+    if (!is.null(mr <- RG@roles$multresp)) {
+        # use the grid value only for the 1st mult resp (no dupes)
+        if (length(mr) > 0)
+            grid = grid[grid[[mr]] == RG@levels[[mr]][1], ]
+    }
     grid[[var]] = grid[[var]] + delta.var
     
     basis = lsm.basis(model, attr(data, "terms"), RG@roles$xlev, grid, ...)

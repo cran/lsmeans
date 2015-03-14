@@ -306,8 +306,8 @@ test(contrast(Oats.Vlsm, "trt.vs.ctrlk"), side = "nonsup", delta = .25)
 ### code chunk number 47: chick-plot
 ###################################################
 require("lattice")
-xyplot(weight~Time | Diet, groups = ~ Chick, data=ChickWeight, type="o", 
-       layout=c(4,1))
+xyplot(weight~Time | Diet, groups = ~ Chick, data = ChickWeight, 
+    type = "o", layout=c(4, 1))
 
 
 ###################################################
@@ -448,34 +448,54 @@ lsmip(housing.clm, Cont ~ Infl | Type, layout = c(4,1))
 
 
 ###################################################
-### code chunk number 67: using-lsmeans.rnw:738-739
+### code chunk number 67: using-lsmeans.rnw:739-740
 ###################################################
 test(pairs(lsmeans(housing.clm, ~ Infl | Type)), joint = TRUE)
 
 
 ###################################################
-### code chunk number 68: using-lsmeans.rnw:742-743
+### code chunk number 68: using-lsmeans.rnw:743-744
 ###################################################
 test(pairs(lsmeans(housing.clm, ~ Cont | Type)), joint = TRUE)
 
 
 ###################################################
-### code chunk number 69: using-lsmeans.rnw:748-749
+### code chunk number 69: using-lsmeans.rnw:749-750
 ###################################################
 ref.grid(housing.clm, mode = "cum.prob")
 
 
 ###################################################
-### code chunk number 70: using-lsmeans.rnw:752-754
+### code chunk number 70: using-lsmeans.rnw:753-755
 ###################################################
 lsmeans(housing.clm, ~ Infl, at = list(cut = "Medium|High"), 
         mode = "cum.prob")
 
 
 ###################################################
-### code chunk number 71: using-lsmeans.rnw:757-759
+### code chunk number 71: using-lsmeans.rnw:758-760
 ###################################################
 summary(lsmeans(housing.clm, ~ Infl, at = list(cut = "Medium|High"), 
                 mode = "linear.predictor"), type = "response")
+
+
+###################################################
+### code chunk number 72: using-lsmeans.rnw:768-776
+###################################################
+require("nlme")
+options(contrasts = c("contr.treatment", "contr.poly"))
+Chick.nlme = nlme(weight ~ SSlogis(Time, asym, xmid, scal), 
+    data = ChickWeight,
+    fixed = list(asym + xmid ~ Diet, scal ~ 1),
+    random = asym ~ 1 | Chick, 
+    start = c(200, 100, 200, 100,   10, 0, 0, 0,   7))
+Chick.nlme
+
+
+###################################################
+### code chunk number 73: using-lsmeans.rnw:779-781
+###################################################
+cld(lsmeans(Chick.nlme, ~ Diet, param = "asym"))    
+cld(lsmeans(Chick.nlme, ~ Diet, param = "xmid"))    
 
 

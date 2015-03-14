@@ -16,7 +16,7 @@ Additional models can be supported by writing appropriate \code{recover.data} an
   \describe{
   \item{lm, aov, glm}{No extended features. Note that the \code{lm} support often extends to a number of model objects that inherit from it, such as \code{rlm} in the \pkg{MASS} package and \code{rsm} in the \pkg{rsm} package.}
   \item{mlm}{When there is a multivariate response, the different responses are treated as if they were levels of a factor -- named \code{rep.meas} by default. The \code{mult.name} argument may be used to change this name. The \code{mult.levs} argument may specify a named list of one or more sets of levels. If this has more than one element, then the multivariate levels are expressed as combinations of the named factor levels via the function \code{\link{expand.grid}}.}
-  \item{aovList}{Support for these objects is limited. To avoid strong biases in the predictions, the \code{contrasts} attribute of all factors should be of a type that sums to zero -- for example, \code{"contr.sum"}, \code{"contr.poly"}, or \code{"contr.helmert"} but \emph{not} \code{"contr.treatment"}.  Only intra-block estimates of covariances are used. That is, if a factor appears in more than one error stratum, only the covariance structure from its lowest stratum is used in estimating standard errors. In general, \code{aovList} support is best with balanced designs, and due caution in the use of contrasts.}
+  \item{aovlist}{Support for these objects is limited. To avoid strong biases in the predictions, the \code{contrasts} attribute of all factors should be of a type that sums to zero -- for example, \code{"contr.sum"}, \code{"contr.poly"}, or \code{"contr.helmert"} but \emph{not} \code{"contr.treatment"}.  Only intra-block estimates of covariances are used. That is, if a factor appears in more than one error stratum, only the covariance structure from its lowest stratum is used in estimating standard errors. In general, \code{aovList} support is best with balanced designs, and due caution in the use of contrasts.}
 }} %stats
 
 
@@ -78,17 +78,18 @@ Tests and confidence intervals are asymptotic.}
 \item{rlm}{Supported by virtue of inheritance from \code{lm}.}
 }}% MASS
 
-\section{\pkg{mgcv} package}{
-\describe{
-\item{gam}{Supported by virtue of inheritance from \code{glm}.}
-\item{gamm}{Not supported at this time.}
-}}% mgcv
+%\section{\pkg{mgcv} package}{
+%\describe{
+%\item{gam}{Supported by virtue of inheritance from \code{glm}.}
+%\item{gamm}{Not supported at this time.}
+%}}% mgcv
 
 
 \section{\pkg{nlme} package}{
 \describe{
-\item{gls}{No degrees of freedom are available for these objects, so tests and confidence intervals are asymptotic.}
-\item{lme}{No degrees of freedom, as per \code{gls} objects. The optional argument \code{adjustSigma} (defaults to \code{TRUE}) will adjust standard errors like in \code{\link[nlme]{summary.lme}} when the model is fitted using the \code{"ML"} method. \bold{Note:} It is possible for the \code{adjust} argument (for \eqn{p}-value adjustments) to conflict with \code{adjustSigma}. The workaround is to specify both: e.g., \samp{lsmeans(mod.lme, pairwise ~ trt, adjustSigma = TRUE, adjust = "none")}}
+\item{gls}{No additional features. Degrees of freedom are computed using \code{N - p} in \code{object$dims}. This is consistent with \code{nlme:::summary.gls} but seems questionable.}
+\item{lme}{Degrees of freedom are obtained using a containment method, i.e., the minimum of those elements of \code{object$fixDF$X} receiving nonzero weight (but with a correction to the \code{lme} object's intercept df). (This is similar to \pkg{SAS}'s containment method, but I believe \pkg{SAS} does it incorrectly when the estimands are not contrasts.) The optional argument \code{adjustSigma} (defaults to \code{TRUE}) will adjust standard errors like in \code{\link[nlme]{summary.lme}} when the model is fitted using the \code{"ML"} method. \bold{Note:} It is possible for the \code{adjust} argument (for \eqn{p}-value adjustments) to conflict with \code{adjustSigma}. The workaround is to specify both: e.g., \samp{lsmeans(mod.lme, pairwise ~ trt, adjustSigma = TRUE, adjust = "none")}}
+\item{nlme}{Support is provided for inferences on parameters named in the \code{fixed} part of the model. The user \emph{must} specify \code{param} in the call and give the name of a parameter that appears in the right-hand side of a \code{fixed} formula. Degrees of freedom are obtained using the containment-like method described above for \code{lme}.}
 }}% nlme
 
 \section{\pkg{ordinal} package}{
