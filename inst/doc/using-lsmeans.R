@@ -499,3 +499,26 @@ cld(lsmeans(Chick.nlme, ~ Diet, param = "asym"))
 cld(lsmeans(Chick.nlme, ~ Diet, param = "xmid"))    
 
 
+###################################################
+### code chunk number 74: using-lsmeans.rnw:793-798
+###################################################
+library("MCMCpack")
+counts <- c(18, 17, 15,   20, 10, 20,   25, 13, 12)
+outcome <- gl(3, 1, 9)
+treatment <- gl(3, 3)
+posterior <- MCMCpoisson(counts ~ outcome + treatment, mcmc = 1000)
+
+
+###################################################
+### code chunk number 75: using-lsmeans.rnw:801-802
+###################################################
+( post.lsm <- lsmeans(posterior, "treatment") )
+
+
+###################################################
+### code chunk number 76: using-lsmeans.rnw:805-807
+###################################################
+library("coda")
+summary(as.mcmc(post.lsm))
+
+

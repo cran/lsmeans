@@ -16,7 +16,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
             stop("Possible remedy: Supply the data used in the 'data' argument")
     }
     else # attach needed attributes to given data
-        data = recover.data(object, data = data)
+        data = recover.data(object, data = data, ...)
     
     if(is.character(data)) # 'data' is in fact an error message
         stop(data)
@@ -86,18 +86,20 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     for (nm in attr(data, "predictors")) {
         x = data[[nm]]
         
-    # Save the original levels of factors, no matter what
-    if (is.factor(x))
-        xlev[[nm]] = levels(factor(x))
-    # (applying factor drops any unused levels)
+        # Save the original levels of factors, no matter what
+        if (is.factor(x))
+            xlev[[nm]] = levels(factor(x))
+            # (applying factor drops any unused levels)
     
-    # Now go thru and find reference levels...
+        # Now go thru and find reference levels...
         # mentioned in 'at' list but not coerced
         if (!(nm %in% coerced) && !missing(at) && !is.null(at[[nm]]))
             ref.levels[[nm]] = at[[nm]]
         # factors not in 'at'
         else if (is.factor(x))
             ref.levels[[nm]] = levels(factor(x))
+        else if (is.character(x))
+            ref.levels[[nm]] = sort.unique(x)
         # matrices
         else if (is.matrix(x)) {
             # Matrices -- reduce columns thereof, but don't add to baselevs
@@ -237,16 +239,21 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     misc$adjust = "none"
     misc$famSize = nrow(grid)
     misc$avgd.over = character(0)
+
+    post.beta = basis$post.beta
+    if (is.null(post.beta))
+        post.beta = matrix(NA)
     
-    result = new ("ref.grid",
+    result = new("ref.grid",
          model.info = list(call = attr(data,"call"), terms = trms, xlev = xlev),
          roles = list(predictors = attr(data, "predictors"), 
                       responses = attr(data, "responses"), 
                       multresp = multresp),
          grid = grid, levels = ref.levels, matlevs = matlevs,
          linfct = basis$X, bhat = basis$bhat, nbasis = basis$nbasis, V = basis$V,
-         dffun = basis$dffun, dfargs = basis$dfargs, misc = misc)
-
+         dffun = basis$dffun, dfargs = basis$dfargs, 
+         misc = misc, post.beta = post.beta)
+        
     if (!missing(type)) {
         if (is.null(options)) options = list()
         options$predict.type = type
