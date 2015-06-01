@@ -1,5 +1,19 @@
 Changelog for 'lsmeans' package
 
+2.18
+    In DESCRIPTION, moved all Enhances packages to Suggests;
+        Enhancements can't be tested and cause headaches
+    Fixed bug in lstrends - 'data' argument was not used correctly
+    Fixed bug in cld where fatal error occurs when type = "response"
+    Added temporary workaround for 'maov' and 'manova' objects
+        (error in stats coef.maov now fixed in R-devel)
+    Re-enabled existing code for 'mer' support (lme4.0) -- 
+        previously had trouble with > 1 Additional_repositories
+    Made "dunnettx"-adjusted critical values more robust
+    Coding improvements for adjusted p values and critical values
+    Added 'consec.lsmc' and 'mean_chg.lsmc' to available contrasts
+    Added support for the CARBayes package
+    
 
 2.17
     Removed unneeded import of 'Matrix' (could have done this in 2.12
