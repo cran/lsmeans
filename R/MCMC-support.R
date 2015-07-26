@@ -20,7 +20,7 @@ as.mcmc.ref.grid = function(x, names = TRUE, ...) {
 # Currently, data is required, as call is not stored
 recover.data.MCMCglmm = function(object, data, ...) {    
     # if a multivariate response, stack the data with `trait` variable
-    yvars = all.vars(update(object$Fixed$formula, ". ~ 1"))
+    yvars = All.vars(update(object$Fixed$formula, ". ~ 1"))
     if(length(yvars) > 1) {
 #        for (v in yvars) data[[v]] = NULL
         dat = data
@@ -30,17 +30,20 @@ recover.data.MCMCglmm = function(object, data, ...) {
     }
     attr(data, "call") = object$Fixed
     attr(data, "terms") = trms = delete.response(terms(object$Fixed$formula))
-    attr(data, "predictors") = all.vars(delete.response(trms))
+    attr(data, "predictors") = All.vars(delete.response(trms))
     attr(data, "responses") = yvars
     data
 }
 
-lsm.basis.MCMCglmm = function(object, trms, xlev, grid, ...) {
+lsm.basis.MCMCglmm = function(object, trms, xlev, grid, vcov., ...) {
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = NULL)
     Sol = as.matrix(object$Sol)[, seq_len(object$Fixed$nfl)] # toss out random effects if included
     bhat = apply(Sol, 2, mean)
-    V = cov(Sol)
+    if (missing(vcov.))
+        V = cov(Sol)
+    else
+        V = .my.vcov(object, vcov.)
     misc = list()
     list(X = X, bhat = bhat, nbasis = matrix(NA), V = V, 
          dffun = function(k, dfargs) NA, dfargs = list(), 
@@ -72,12 +75,15 @@ recover.data.mcmc = function(object, formula, data, ...) {
     recover.data(cl, trms, NULL, data, ...)
 }
 
-lsm.basis.mcmc = function(object, trms, xlev, grid, ...) {
+lsm.basis.mcmc = function(object, trms, xlev, grid, vcov., ...) {
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = NULL)
     samp = as.matrix(object)[, seq_len(ncol(X)), drop = FALSE]
     bhat = apply(samp, 2, mean)
-    V = cov(samp)
+    if (missing(vcov.))
+        V = cov(samp)
+    else
+        V = .my.vcov(object, vcov.)
     misc = list()
     list(X = X, bhat = bhat, nbasis = matrix(NA), V = V, 
          dffun = function(k, dfargs) NA, dfargs = list(), 

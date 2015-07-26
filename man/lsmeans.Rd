@@ -84,7 +84,7 @@ The value of \emph{h} to use in forming the difference quotient \emph{(f(x+h) - 
 \item{linfct}{Matrix. Linear functions of \code{bhat} for each combination of \code{levels}}
 \item{df}{Numeric or function with arguments \code{x,dfargs)}. If a number, that is used for the degrees of freedom. If a function, it should return the degrees of freedom for \code{sum(x*bhat)}; if additional parameters are needed, include them in \code{\dots} as \code{dfargs} (not abbreviated).}
 \item{post.beta}{Matrix whose columns comprise a sample from the posterior distribution of the regression coefficients (so that typically, the column averages will be \code{bhat}). A 1 x 1 matrix of \code{NA} indicates that such a sample is unavailable.}
-\item{\dots}{Additional arguments passed to other methods or to \code{\link{ref.grid}}.}
+\item{\dots}{Additional arguments passed to other methods or to \code{\link{ref.grid}}. For example, \code{vcov.} may be used to override the default covariance estimate, and some models allow additional options. Some models require \code{data} to be given explicitly. See the help pages for \code{\link{ref.grid}} and \link{models}. In addition, if the model formula contains references to variables that are not predictors, you must provide a \code{params} argument with a list of their names; see the example below for \code{Oatsq.lm}.}
 }
 
 
@@ -101,8 +101,14 @@ The function \code{lsmobj} may be used to construct an object just like one retu
 }
 
 \value{
-An object of class \code{\link[=lsmobj-class]{lsmobj}} -- except when \code{specs} is a \code{list} or a \code{formula} having a left-hand side, a \code{list} of \code{slmobj} objects. A number of methods are provided for further analysis, including \code{\link[lsmeans]{summary}}, \code{\link[lsmeans]{confint}}, \code{\link[lsmeans]{test}}, \code{\link[lsmeans]{contrast}}, \code{\link[lsmeans]{pairs}}, and \code{\link[lsmeans]{cld}}.
+When \code{specs} is a \code{character} vector or one-sided formula, an object of class \code{\link[=lsmobj-class]{lsmobj}}. A number of methods are provided for further analysis, including \code{\link[lsmeans]{summary}}, \code{\link[lsmeans]{confint}}, \code{\link[lsmeans]{test}}, \code{\link[lsmeans]{contrast}}, \code{\link[lsmeans]{pairs}}, and \code{\link[lsmeans]{cld}}.
+
+When \code{specs} is a \code{list} or a \code{formula} having a left-hand side, the eturn value is an \code{lsm.list} object, which is simply a \code{list} of \code{lsmobj} objects. Methods for \code{lsm.list} objects are the same as those for \code{lsmobj}, but they apply to only one member of the list, determined by its \code{which} argument.
 }
+
+\note{If the model formula contains variables that are not predictors (e.g., degree of a polynomial, knots for a spline, etc.), you must add a \code{params} argument to the call}
+
+\note{While using \code{specs} as a two-sided formula or a list is a convenient way to get a lot of results with minimal effort, it can also create confusion when additional arguments are provided, because not all arguments may be applied to all the results produced (see examples). Thus, the safer route is to do things incrementally.}
 
 \note{\code{lsmeans} and its relatives can produce fatal errors or incorrect results with models containing splines (e.g., \code{\link{ns}}) and other smoothers because the required information to reconstruct their basis is not always available. A model with \code{\link{poly}} involving two or more predictors will almost always produce misleading results without any warning; but \code{poly(..., raw = TRUE)} will work correctly.}
 
@@ -136,12 +142,14 @@ contrast(fiber.lsm, "trt.vs.ctrlk")
 # Or get both at once using
 #     lsmeans (fiber.lm, "machine", contr = "trt.vs.ctrlk")
 
+
 ### Factorial experiment
 warp.lm <- lm(breaks ~ wool * tension, data = warpbreaks)
 ( warp.lsm <- lsmeans (warp.lm,  ~ wool | tension,
     options = list(estName = "pred.breaks")) )
 pairs(warp.lsm) # remembers 'by' structure
 contrast(warp.lsm, method = "poly", by = "wool")
+
 
 ### Unbalanced split-plot example ###
 #-- The imbalance is imposed deliberately to illustrate that
@@ -150,20 +158,36 @@ require(nlme)
 Oats.lme <- lme(yield ~ factor(nitro) + Variety, 
     random = ~1 | Block/Variety, 
     subset = -c(1,2,3,5,8,13,21,34,55), data = Oats)
-lsmeans(Oats.lme, list(poly ~ nitro, pairwise ~ Variety))
+(Oats.anal <- lsmeans(Oats.lme, list(poly ~ nitro, pairwise ~ Variety)))
 
-# Model with a quadratic trend for 'nitro'
-Oatsq.lme <- update(Oats.lme, . ~ nitro + I(nitro^2) + Variety)
-# Predictions at each unique 'nitro' value in the dataset
-lsmeans(Oatsq.lme, ~ nitro, cov.reduce = FALSE)
+
+### Issues with lists of specs
+test(Oats.anal)                # Uses 1st element by default
+confint(Oats.anal, which = 4)  # or confint(Oats.anal[[4]])
+
+# These two calls apply the "bonf" adjustment to different elements...
+lsmeans(warp.lm, eff ~ wool, adjust = "bonf") 
+lsmeans(warp.lm, eff ~ wool, options = list(adjust = "bonf"))
+# Advice: Do one thing at a time if you want non-default adjustments
+#   e.g., wool.lsm <- lsmeans(warp.lm, ~ wool)
+#         summary(wool.lsm, adjust = "bonf")
+#         contrast(wool.lsm, "eff", adjust = "sidak")
+
 
 ### Weights
 # See what's being averaged over in the above
-lsmeans(Oatsq.lme, ~ nitro, cov.reduce = FALSE, weights = "show.levels")
+lsmeans(Oats.lme, ~ nitro, cov.reduce = FALSE, weights = "show.levels")
 
 # Give three times the weight to Marvellous
-lsmeans(Oatsq.lme, ~ nitro, cov.reduce = FALSE, 
-    weights = c(1,3,1))
+lsmeans(Oats.lme, ~ nitro, cov.reduce = FALSE, weights = c(1,3,1))
+
+
+### Model with a quadratic trend for 'nitro'
+# Also illustrates use of `params` argument to list non-predictors
+deg = 2
+Oatsq.lm <- lm(yield ~ Block + poly(nitro, deg) + Variety, data = Oats)
+# Predictions at each unique 'nitro' value in the dataset
+lsmeans(Oatsq.lm, ~ nitro, cov.reduce = FALSE, params = "deg")
 
 
 ### Trends
@@ -191,6 +215,7 @@ city.lsm <- lsmobj(bhat = ybar, V = diag(se2),
     df = Satt.df, dfargs = list(v = se2, n = n), estName = "mean")
 city.lsm
 contrast(city.lsm, "revpairwise")
+    
     
 # See also many other examples in documentation for 
 # 'contrast', 'cld', 'glht', 'lsmip', 'ref.grid', 'MOats',

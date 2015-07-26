@@ -12,8 +12,8 @@ recover.data.clm = function(object, mode = "latent", ...) {
         recover.data.lm(object, ...)
     else { # bring-in predictors from loc, scale, and nom models
         trms = delete.response(object$terms)
-        #preds = union(all.vars(trms), union(all.vars(object$S.terms), all.vars(object$nom.terms)))
-        x.preds = union(all.vars(object$S.terms), all.vars(object$nom.terms))
+        #preds = union(All.vars(trms), union(All.vars(object$S.terms), All.vars(object$nom.terms)))
+        x.preds = union(All.vars(object$S.terms), All.vars(object$nom.terms))
         #x.trms = update(trms, reformulate(preds))
         x.trms = terms(update(trms, reformulate(c(".", x.preds))))
         recover.data(object$call, x.trms, object$na.action, ...)
@@ -44,7 +44,7 @@ lsm.basis.clm = function (object, trms, xlev, grid,
         warning("Contrasts used to fit the model are unknown.\n",
                 "Defaulting to system option, but results may be wrong.")
     bhat = coef(object)
-    V = vcov(object)
+    V = .my.vcov(object, ...)
     tJac = object$tJac
     dffun = function(...) NA
     link = as.character(object$info$link)
@@ -305,7 +305,7 @@ lsm.basis.clm = function (object, trms, xlev, grid,
         nbasis = estimability::nonest.basis(S)
     }
     k = sum(!is.na(bhat)) - 1
-    V = vcov(object)
+    V = .my.vcov(object, ...)
     pick = nrow(V) - k + seq_len(k)
     V = V[pick, pick, drop = FALSE]
     V = cbind(0, rbind(0,V))

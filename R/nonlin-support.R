@@ -7,7 +7,7 @@ recover.data.nls = function(object, ...) {
 }
 
 lsm.basis.nls = function(object, trms, xlev, grid, ...) {
-    Vbeta = vcov(object)
+    Vbeta = .my.vcov(object, ...)
     env = object$m$getEnv()
     for (nm in names(grid)) env[[nm]] = grid[[nm]]
     pars = object$m$getAllPars()
@@ -44,7 +44,7 @@ recover.data.nlme = function(object, param, ...) {
     fcall$weights = NULL
     #trms = delete.response(terms(update(terms(object), form)))
     trms = delete.response(terms(form))
-    if (length(all.vars(trms)) == 0)
+    if (length(All.vars(trms)) == 0)
         return(paste("No predictors for '", param, "' in fixed model", sep = ""))
     recover.data(fcall, trms, object$na.action, ...)
 }

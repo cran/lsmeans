@@ -1,5 +1,24 @@
 Changelog for 'lsmeans' package
 
+2.19
+    Added optional `params` argument for `ref.grid` and related
+        functions - use it to specify variables in the model formula
+        that are not predictors
+    Added optional `vcov.` argument so user can override the default
+        vcov() with a function or specified matrix
+    Now supports model formulas containing `$` and `[[]]`
+        (and related exported function `All.vars`)
+    Revised support for survreg, coxph, coxme -- strata and cluster
+        no longer in reference grid. 
+        Previous coxme support was bad for other reasons as well
+    Added as.glht method for 'lsm.list', similar to other methods 
+        for this class
+    In 'contrast', when 'method' is a list, names are kept as-is
+        whereas previously there was an implicit 'make.names' call
+    Imports of globals from default packages per a change in CRAN 
+        checking requirements.
+
+
 2.18
     In DESCRIPTION, moved all Enhances packages to Suggests;
         Enhancements can't be tested and cause headaches
@@ -156,7 +175,7 @@ Changelog for 'lsmeans' package
     Support for 'aovlist' objects (does intra-block analysis)
         To use, avoid contr.treatment; use contr.sum or other that sums to 0
     Added 'contrast', 'test', 'pairs', 'confint', 'cld' methods for
-        lsmlist, with 'which' argument defaulting to 1
+        lsm.list, with 'which' argument defaulting to 1
     Added 'disable.pbkrtest' option (via lsm.options) if you don't want
         bias correction and K-R degrees of freedom with lmerMod objects
     Added 'df' argument to 'ref.grid' constructor, also 'summary' and 

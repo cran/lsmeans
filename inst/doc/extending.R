@@ -54,24 +54,24 @@ recover.data.lqs = lsmeans:::recover.data.lm
 ###################################################
 ### code chunk number 8: extending.rnw:97-99
 ###################################################
-rec.fake = recover.data(fake.lts, data = NULL)
+rec.fake = recover.data(fake.lts)
 head(rec.fake)
 
 
 ###################################################
-### code chunk number 9: extending.rnw:109-110
+### code chunk number 9: extending.rnw:113-114
 ###################################################
 args(lsmeans:::lsm.basis.lm)
 
 
 ###################################################
-### code chunk number 10: extending.rnw:117-118
+### code chunk number 10: extending.rnw:121-122
 ###################################################
 MASS:::predict.lqs
 
 
 ###################################################
-### code chunk number 11: extending.rnw:122-133
+### code chunk number 11: extending.rnw:126-137
 ###################################################
 lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
@@ -87,19 +87,19 @@ lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
 
 
 ###################################################
-### code chunk number 12: extending.rnw:137-138
+### code chunk number 12: extending.rnw:141-142
 ###################################################
 lsmeans(fake.lts, ~ B | A)
 
 
 ###################################################
-### code chunk number 13: extending.rnw:149-150 (eval = FALSE)
+### code chunk number 13: extending.rnw:153-154 (eval = FALSE)
 ###################################################
 ## nbasis = estimability::nonest.basis(Xmat)
 
 
 ###################################################
-### code chunk number 14: extending.rnw:161-170
+### code chunk number 14: extending.rnw:165-174
 ###################################################
 lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
@@ -113,7 +113,7 @@ lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
 
 
 ###################################################
-### code chunk number 15: extending.rnw:173-174
+### code chunk number 15: extending.rnw:177-178
 ###################################################
 lsmeans(fake.lts, pairwise ~ B)
 

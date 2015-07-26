@@ -71,32 +71,28 @@ lsm.basis.default = function(object, trms, xlev, grid, ...) {
 # For model objects, call this with the object's call and its terms component
 # Late addition: if data is non-null, use it in place of recovered data
 # Later addition: na.action arg req'd - vector of row indexes removed due to NAs
-recover.data.call = function(object, trms, na.action, data, ...) {
+recover.data.call = function(object, trms, na.action, data = NULL, params = NULL, ...) {
     fcall = object # because I'm easily confused
-    vars = all.vars(trms)
+    vars = setdiff(All.vars(trms), params)
     tbl = data
     if (is.null(tbl)) {
-#         m = match(c("formula", "data", "subset", "weights", 
-#                      "na.action", "offset"), names(fcall), 0L)
-# I think we don't need to match some of these just to recover the data        
         m = match(c("formula", "data", "subset", "weights"), names(fcall), 0L)
         fcall = fcall[c(1L, m)]
         fcall$drop.unused.levels = TRUE
         fcall[[1L]] = as.name("model.frame")
         fcall$xlev = NULL # we'll ignore xlev
         fcall$na.action = na.omit
-        # (moved earlier)  vars = all.vars(trms) # (length will always be >= 2)
-        # Put one var on left - keeps out lhs transformations
-        if (length(vars) > 1) 
-            form = reformulate(vars[-1], response = vars[1])
-        else 
-            form = reformulate(vars)
+        ### I once had a reason to put one var on the left, but don't remember why
+        ### Now it messes up if there's a '$' in that term
+        #         if (length(vars) > 1) 
+        #             form = reformulate(vars[-1], response = vars[1])
+        #         else
+        form = reformulate(vars)
         fcall$formula = update(trms, form)
         env = environment(trms)
         if (is.null(env)) 
             env = parent.frame()
         tbl = eval(fcall, env, parent.frame())
-        # Drop rows associated with NAs in data
         if (!is.null(na.action))
             tbl = tbl[-(na.action),  , drop=FALSE]
     }
@@ -106,8 +102,8 @@ recover.data.call = function(object, trms, na.action, data, ...) {
     
     attr(tbl, "call") = object # the original call
     attr(tbl, "terms") = trms
-    attr(tbl, "predictors") = all.vars(delete.response(trms))
-    attr(tbl, "responses") = setdiff(vars, attr(tbl, "predictors"))
+    attr(tbl, "predictors") = setdiff(All.vars(delete.response(trms)), params)
+    attr(tbl, "responses") = setdiff(vars, union(attr(tbl, "predictors"), params))
     tbl
 }
 
@@ -125,7 +121,7 @@ lsm.basis.lm = function(object, trms, xlev, grid, ...) {
     # coef() works right for lm but coef.aov tosses out NAs
     bhat = as.numeric(object$coefficients) 
     # stretches it out if multivariate - see mlm method
-    V = vcov(object)
+    V = .my.vcov(object, ...)
     
     if (sum(is.na(bhat)) > 0)
         nbasis = estimability::nonest.basis(object$qr)
@@ -175,12 +171,15 @@ recover.data.merMod = function(object, ...) {
                  attr(object@frame, "na.action"), ...)
 }
 
-lsm.basis.merMod = function(object, trms, xlev, grid, ...) {
-    V = as.matrix(vcov(object))
+lsm.basis.merMod = function(object, trms, xlev, grid, vcov., ...) {
+    if (missing(vcov.))
+        V = as.matrix(vcov(object))
+    else
+        V = as.matrix(.my.vcov(object, vcov.))
     dfargs = misc = list()
     if (lme4::isLMM(object)) {
         pbdis = .lsm.is.true("disable.pbkrtest")
-        if (!pbdis && requireNamespace("pbkrtest")) {
+        if (!pbdis && requireNamespace("pbkrtest") && missing(vcov.)) {
             dfargs = list(unadjV = V, 
                 adjV = pbkrtest::vcovAdj.lmerMod(object, 0))
             V = as.matrix(dfargs$adjV)
@@ -243,7 +242,7 @@ recover.data.mer = function(object, ...) {
 
 # Does NOT support pbkrtest capabilities. Uses asymptotic methods
 lsm.basis.mer = function(object, trms, xlev, grid, ...) {
-    V = as.matrix(vcov(object))
+    V = as.matrix(.my.vcov(object, ...))
     dfargs = misc = list()
     if (lme4.0::isLMM(object)) {
         dffun = function(k, dfargs) NA        
@@ -287,7 +286,7 @@ lsm.basis.lme = function(object, trms, xlev, grid, adjustSigma = TRUE, ...) {
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = contrasts)
     bhat = nlme::fixef(object)
-    V = vcov(object)
+    V = .my.vcov(object, ...)
     if (adjustSigma && object$method == "ML") 
         V = V * object$dims$N / (object$dims$N - nrow(V))
     misc = list()
@@ -324,7 +323,7 @@ lsm.basis.gls = function(object, trms, xlev, grid, ...) {
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = contrasts)
     bhat = coef(object)
-    V = vcov(object)
+    V = .my.vcov(object, ...)
     nbasis = estimability::all.estble
     dfargs = list(df = object$dims$N - object$dims$p)
     dffun = function(k, dfargs) dfargs$df
@@ -349,7 +348,7 @@ lsm.basis.polr = function(object, trms, xlev, grid,
     if (xint > 0L) 
         X = X[, -xint, drop = FALSE]
     bhat = c(coef(object), object$zeta)
-    V = vcov(object)
+    V = .my.vcov(object, ...)
     k = length(object$zeta)
     if (mode == "latent") {
         X = rescale[2] * cbind(X, matrix(- 1/k, nrow = nrow(X), ncol = k))
@@ -381,7 +380,16 @@ lsm.basis.polr = function(object, trms, xlev, grid,
 
 #--------------------------------------------------------------
 ### survreg objects (survival package)
-recover.data.survreg = recover.data.lm
+recover.data.survreg = function(object, ...) {
+    fcall = object$call
+    trms = delete.response(terms(object))
+    # I'm gonna delete any terms involving strata(), cluster(), or frailty()
+    mod.elts = dimnames(attr(trms, "factor"))[[2]]
+    tmp = grep("strata\\(|cluster\\(|frailty\\(", mod.elts)
+    if (length(tmp))
+        trms = trms[-tmp]
+    recover.data(fcall, trms, object$na.action, ...)
+}
 
 # Seems to work right in a little testing.
 # However, it fails sometimes if I update the model 
@@ -390,11 +398,12 @@ lsm.basis.survreg = function(object, trms, xlev, grid, ...) {
     # Much of this code is adapted from predict.survreg
     bhat = object$coefficients
     k = length(bhat)
-    V = vcov(object)[seq_len(k), seq_len(k), drop=FALSE]
-    is.fixeds = (k == ncol(object$var))
+    V = .my.vcov(object, ...)[seq_len(k), seq_len(k), drop=FALSE]
+    # ??? not used... is.fixeds = (k == ncol(object$var))
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)    
-    # Hmmm, differs from my lm method using model.matrix(trms, m, contrasts)
-    X = model.matrix(object, m)
+    # X = model.matrix(object, m) # This is what predict.survreg does
+    # But I have manipulated trms, so need to make sure things are consistent
+    X = model.matrix(trms, m, contrasts.arg = object$contrasts)
     nbasis = estimability::nonest.basis(model.matrix(object))
     dfargs = list(df = object$df.residual)
     dffun = function(k, dfargs) dfargs$df
@@ -409,13 +418,15 @@ lsm.basis.survreg = function(object, trms, xlev, grid, ...) {
 
 #--------------------------------------------------------------
 ###  coxph objects (survival package)
-recover.data.coxph = recover.data.survreg
+recover.data.coxph = function(object, ...) 
+    recover.data.survreg(object, ...)
 
-lsm.basis.coxph = function(object, trms, xlev, grid, ...) {
+lsm.basis.coxph = function (object, trms, xlev, grid, ...) 
+{
     object$dist = "doesn't matter"
     result = lsm.basis.survreg(object, trms, xlev, grid, ...)
     result$dfargs$df = NA
-    # mimic code for reference = "sample" in predict.coxph
+    result$X = result$X[, -1, drop = FALSE]
     result$X = result$X - rep(object$means, each = nrow(result$X))
     result$misc$tran = "log"
     result$misc$inv.lbl = "hazard"
@@ -428,14 +439,25 @@ lsm.basis.coxph = function(object, trms, xlev, grid, ...) {
 
 #--------------------------------------------------------------
 ###  coxme objects ####
-recover.data.coxme = recover.data.coxph
+### Greatly revised 6-15-15 (after version 2.18)
+recover.data.coxme = function(object, ...) 
+    recover.data.survreg(object, ...)
 
-# I guess this works because it's based on lme code
 lsm.basis.coxme = function(object, trms, xlev, grid, ...) {
-    result = lsm.basis.lme(object, trms, xlev, grid, ...)
-    result$misc$tran = "log"
-    result$misc$inv.lbl = "hazard"
-    result
+    bhat = fixef(object)
+    k = length(bhat)
+    V = .my.vcov(object, ...)[seq_len(k), seq_len(k), drop = FALSE]
+    m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
+    X = model.matrix(trms, m)
+    X = X[, -1, drop = FALSE] # remove the intercept
+    # scale the linear predictor
+    for (j in seq_along(X[1, ]))
+        X[, j] = (X[, j] - object$means[j]) ### / object$scale[j]
+    nbasis = estimability::all.estble
+    dffun = function(k, dfargs) NA
+    misc = list(tran = "log", inv.lbl = "hazard")
+    list(X = X, bhat = bhat, nbasis = nbasis, V = V, dffun = dffun, 
+         dfargs = list(), misc = misc)
 }
 
 
@@ -451,10 +473,16 @@ lsm.basis.coxme = function(object, trms, xlev, grid, ...) {
 #     -- so ultimately results can only be "mammal" or "fish"
 # nonmatches revert to 1st elt.
 .named.vcov.default = function(object, method, valid, idx = seq_along(valid), ...) {
-    i = pmatch(method, valid, 1)
-    method = valid[idx[i]]
-    V = object[[method]]
-    attr(V, "methMesg") = paste("Covariance estimate used: \"", method, "\"", sep = "")
+    if (!is.character(method)) { # in case vcov. arg was matched by vcov.method {
+        V = .my.vcov(object, method)
+        method = "user-supplied"
+    }
+    else {
+        i = pmatch(method, valid, 1)
+        method = valid[idx[i]]
+        V = object[[method]]
+    }
+    attr(V, "methMesg") = paste("Covariance estimate used:", method)
     V
 }
 
@@ -541,7 +569,9 @@ lsm.basis.geese = function(object, trms, xlev, grid, vcov.method = "vbeta", ...)
 #     else
         nbasis = estimability::all.estble
     
-    misc = .std.link.labels(eval(object$call$family)(), list())
+    misc = list()
+    if (!is.null(fam <- object$call$family))
+        misc = .std.link.labels(eval(fam)(), misc)
     misc$initMesg = attr(V, "methMesg")
     dffun = function(k, dfargs) NA
     dfargs = list()
@@ -574,7 +604,7 @@ lsm.basis.glmmadmb = function (object, trms, xlev, grid, ...)
     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
     X = model.matrix(trms, m, contrasts.arg = contrasts)
     bhat = glmmADMB::fixef(object)
-    V = vcov(object)
+    V = .my.vcov(object, ...)
     misc = list()
     if (!is.null(object$family)) {
         fam = object$family
@@ -618,9 +648,26 @@ lsm.basis.gam = function(object, trms, xlev, grid, ...) {
 # }
 
 
+
+
+
+
+### ----- Auxiliary routines -------------------------
+# Provide for vcov. argument in ref.grid call, which could be a function or a matrix
+
+.my.vcov = function(object, vcov. = stats::vcov, ...) {
+    if (is.function(vcov.))
+        vcov. = vcov.(object)
+    else if (!is.matrix(vcov.))
+        stop("vcov. must be a function or a square matrix")
+    vcov.
+}
+
 # Call this to do the standard stuff with link labels
 # Returns a modified misc
 .std.link.labels = function(fam, misc) {
+    if (is.null(fam))
+        return(misc)
     misc$tran = fam$link
     misc$inv.lbl = "response"
     if (length(grep("binomial", fam$family)) == 1)
@@ -628,4 +675,18 @@ lsm.basis.gam = function(object, trms, xlev, grid, ...) {
     else if (length(grep("poisson", fam$family)) == 1)
         misc$inv.lbl = "rate"
     misc
+}
+
+## Alternative to all.vars, but keeps vars like foo$x and foo[[1]] as-is
+##   Passes ... to all.vars
+All.vars = function(expr, retain = c("\\$", "\\[\\[", "\\]\\]"), ...) {
+    repl = paste("_Av", seq_along(retain), "_", sep = "")
+    for (i in seq_along(retain))
+        expr = gsub(retain[i], repl[i], expr)
+    subs = switch(length(expr), 1, c(1,2), c(2,1,3))
+    vars = all.vars(as.formula(paste(expr[subs], collapse = "")), ...)
+    retain = gsub("\\\\", "", retain)
+    for (i in seq_along(retain))
+        vars = gsub(repl[i], retain[i], vars)
+    vars
 }
