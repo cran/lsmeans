@@ -24,8 +24,10 @@ Additional models can be supported by writing appropriate \code{recover.data} an
 
 \section{\pkg{afex} package}{
 \describe{
-\item{mixed}{Support for the \code{full.model} element of these objects is the same as that for \code{merMod} in the \pkg{lme4} package -- see below. However, for \pkg{afex} versions 0.10-113 and earlier, the \code{data} argument is required in calls to \code{lsmeans} or \code{ref.grid}, as the information about the original dataset is not preserved in the object.}
-}}% afex
+\item{mixed}{Support for \code{mixed} objects has been removed. Version 0.14 and later of \pkg{afex} provides new object classes with their own \pkg{lsmeans} support.}}}
+% afex
+%%%Support for the \code{full.model} element of these objects is the same as that for \code{merMod} in the \pkg{lme4} package -- see below. However, for \pkg{afex} versions 0.10-113 and earlier, the \code{data} argument is required in calls to \code{lsmeans} or \code{ref.grid}, as the information about the original dataset is not preserved in the object.}
+
 
 \section{\pkg{CARBayes} package}{
 \describe{
@@ -108,6 +110,12 @@ Tests and confidence intervals are asymptotic.}
 \item{lme}{Degrees of freedom are obtained using a containment method, i.e., the minimum of those elements of \code{object$fixDF$X} receiving nonzero weight (but with a correction to the \code{lme} object's intercept df). (This is similar to \pkg{SAS}'s containment method, but I believe \pkg{SAS} does it incorrectly when the estimands are not contrasts.) The optional argument \code{adjustSigma} (defaults to \code{TRUE}) will adjust standard errors like in \code{\link[nlme]{summary.lme}} when the model is fitted using the \code{"ML"} method. \bold{Note:} It is possible for the \code{adjust} argument (for \eqn{p}-value adjustments) to conflict with \code{adjustSigma}. The workaround is to specify both: e.g., \samp{lsmeans(mod.lme, pairwise ~ trt, adjustSigma = TRUE, adjust = "none")}}
 \item{nlme}{Support is provided for inferences on parameters named in the \code{fixed} part of the model. The user \emph{must} specify \code{param} in the call and give the name of a parameter that appears in the right-hand side of a \code{fixed} formula. Degrees of freedom are obtained using the containment-like method described above for \code{lme}.}
 }}% nlme
+
+\section{\pkg{nnet} package}{
+\describe{
+\item{multinom}{
+The reference grid includes a pseudo-factor with the same name and levels as the multinomial response. There is an optional \code{mode} argument which should match \code{"prob"} or \code{"latent"}. With \code{mode = "prob"}, the reference-grid predictions consist of the estimated multinomial probabilities. The \code{"latent"} mode returns the linear predictor, recentered so that it averages to zero over the levels of the response variable (similar to sum-to-zero contrasts). Thus each latent variable can be regarded as the log probability at that level minus the average log probability over all levels. 
+}}}% nnet, multinom
 
 \section{\pkg{ordinal} package}{
 \describe{
