@@ -472,3 +472,6 @@ regrid = function(object, transform = TRUE) {
 ### S4 methods
 ## use S3 for this setMethod("summary", "ref.grid", summary.ref.grid)
 setMethod("show", "ref.grid", function(object) str.ref.grid(object))
+
+
+

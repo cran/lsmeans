@@ -1,5 +1,4 @@
 ### R code from vignette source 'using-lsmeans.rnw'
-### Encoding: ISO8859-1
 
 ###################################################
 ### code chunk number 1: using-lsmeans.rnw:49-51

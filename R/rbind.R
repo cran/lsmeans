@@ -36,6 +36,14 @@ rbind.ref.grid = function(..., deparse.level = 1, adjust = "mvt") {
            estType = "contrast", infer = c(FALSE, TRUE))
 }
 
+### Needed for compatibility with with R 3.1.3 and earlier
+rbind = function(...) {
+    if (inherits(..1, "ref.grid"))
+        rbind.ref.grid(...)
+    else
+        base::rbind(...)
+}
+
 
 ### Subset a reference grid
 
@@ -47,3 +55,4 @@ rbind.ref.grid = function(..., deparse.level = 1, adjust = "mvt") {
     x@misc$by.vars = NULL
     x
 }
+

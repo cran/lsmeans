@@ -40,6 +40,7 @@ if (requireNamespace("coda", quietly = TRUE)) {
 # Visible exports
 exportPattern("*.lsmc")  #all contrast fcns
 export(
+    .aovlist.dffun,
     All.vars,
     as.glht,
     contrast,
@@ -51,6 +52,7 @@ export(
     lsmip,
     lsm.options,
     lstrends,
+    rbind, # my own version that overrides one in methods
     recover.data,
     ref.grid,
     regrid,
