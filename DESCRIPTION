@@ -1,8 +1,8 @@
 Package: lsmeans
 Type: Package
 Title: Least-Squares Means
-Version: 2.20-2
-Date: 2015-08-28
+Version: 2.20-23
+Date: 2015-10-09
 Authors@R: c(person("Russell", "Lenth", role = c("aut", "cre"), 
     email = "russell-lenth@uiowa.edu"),
   person("Maxime", "Herv\\'e", role = "ctb"))
@@ -21,9 +21,9 @@ Description: Obtain least-squares means for many linear, generalized linear,
   means, and comparisons of slopes. Plots and compact letter displays.
 License: GPL-2
 NeedsCompilation: no
-Packaged: 2015-09-02 02:52:25 UTC; rlenth
+Packaged: 2015-10-09 21:02:24 UTC; rlenth
 Author: Russell Lenth [aut, cre],
   Maxime Herv\'e [ctb]
 Maintainer: Russell Lenth <russell-lenth@uiowa.edu>
 Repository: CRAN
-Date/Publication: 2015-09-02 15:52:18
+Date/Publication: 2015-10-10 22:50:43

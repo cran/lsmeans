@@ -346,23 +346,29 @@ cld (Chick.lst)
 ###################################################
 lsm.options(ref.grid = list(level = .90),
             lsmeans = list(),
-            contrast = list(infer = c(TRUE,TRUE)))
+            contrast = list(infer = c(TRUE, TRUE)))
 
 
 ###################################################
-### code chunk number 54: using-lsmeans.rnw:559-560
+### code chunk number 54: using-lsmeans.rnw:551-552
+###################################################
+get.lsm.option("estble.tol")
+
+
+###################################################
+### code chunk number 55: using-lsmeans.rnw:563-564
 ###################################################
 lsmeans(Oats.lmer2, pairwise ~ Variety)
 
 
 ###################################################
-### code chunk number 55: using-lsmeans.rnw:564-565
+### code chunk number 56: using-lsmeans.rnw:568-569
 ###################################################
 lsm.options(ref.grid = NULL, contrast = NULL)
 
 
 ###################################################
-### code chunk number 56: using-lsmeans.rnw:575-578
+### code chunk number 57: using-lsmeans.rnw:579-582
 ###################################################
 nutr.lm <- lm(gain ~ (age + group + race)^2, data = nutrition)
 library("car")
@@ -370,21 +376,21 @@ Anova(nutr.lm)
 
 
 ###################################################
-### code chunk number 57: nutr-intplot
+### code chunk number 58: nutr-intplot
 ###################################################
 lsmip(nutr.lm, race ~ age | group)
 lsmeans(nutr.lm, ~ group*race)
 
 
 ###################################################
-### code chunk number 58: using-lsmeans.rnw:595-597
+### code chunk number 59: using-lsmeans.rnw:599-601
 ###################################################
 nutr.lsm <- lsmeans(nutr.lm, ~ group * race, weights = "proportional",
     at = list(age = c("2","3"), race = c("Black","White")))
 
 
 ###################################################
-### code chunk number 59: using-lsmeans.rnw:600-603
+### code chunk number 60: using-lsmeans.rnw:604-607
 ###################################################
 nutr.lsm    
 summary(pairs(nutr.lsm, by = "race"), by = NULL)
@@ -392,7 +398,7 @@ summary(pairs(nutr.lsm, by = "group"), by = NULL)
 
 
 ###################################################
-### code chunk number 60: using-lsmeans.rnw:616-620
+### code chunk number 61: using-lsmeans.rnw:620-624
 ###################################################
 lsmeans(nutr.lm, "race", weights = "equal")
 lsmeans(nutr.lm, "race", weights = "prop")
@@ -401,20 +407,20 @@ lsmeans(nutr.lm, "race", weights = "cells")
 
 
 ###################################################
-### code chunk number 61: using-lsmeans.rnw:629-631
+### code chunk number 62: using-lsmeans.rnw:633-635
 ###################################################
 temp = lsmeans(nutr.lm, c("group","race"), weights = "prop")
 lsmeans(temp, "race", weights = "prop")
 
 
 ###################################################
-### code chunk number 62: using-lsmeans.rnw:636-637
+### code chunk number 63: using-lsmeans.rnw:640-641
 ###################################################
 with(nutrition, tapply(gain, race, mean))
 
 
 ###################################################
-### code chunk number 63: using-lsmeans.rnw:644-648
+### code chunk number 64: using-lsmeans.rnw:648-652
 ###################################################
 library("mediation")
 levels(framing$educ) = c("NA","Ref","< HS", "HS", "> HS","Coll +")
@@ -423,34 +429,34 @@ framing.glm = glm(cong_mesg ~ age + income + educ + emo + gender * factor(treat)
 
 
 ###################################################
-### code chunk number 64: framinga
+### code chunk number 65: framinga
 ###################################################
 lsmip(framing.glm, treat ~ educ | gender, type = "response")
 
 
 ###################################################
-### code chunk number 65: framingb
+### code chunk number 66: framingb
 ###################################################
 lsmip(framing.glm, treat ~ educ | gender, type = "response",
       cov.reduce = emo ~ treat*gender + age + educ + income)
 
 
 ###################################################
-### code chunk number 66: using-lsmeans.rnw:675-677
+### code chunk number 67: using-lsmeans.rnw:679-681
 ###################################################
 ref.grid(framing.glm, 
     cov.reduce = emo ~ treat*gender + age + educ + income)@grid
 
 
 ###################################################
-### code chunk number 67: using-lsmeans.rnw:708-710 (eval = FALSE)
+### code chunk number 68: using-lsmeans.rnw:712-714 (eval = FALSE)
 ###################################################
 ## rg <- ref.grid(my.model, at = list(x1 = c(5,10,15)),
 ##                cov.reduce = list(x2 ~ x1,  x3 ~ x1 + x2))
 
 
 ###################################################
-### code chunk number 68: housing-plot
+### code chunk number 69: housing-plot
 ###################################################
 library("ordinal")
 data(housing, package = "MASS")
@@ -460,39 +466,39 @@ lsmip(housing.clm, Cont ~ Infl | Type, layout = c(4,1))
 
 
 ###################################################
-### code chunk number 69: using-lsmeans.rnw:755-756
+### code chunk number 70: using-lsmeans.rnw:759-760
 ###################################################
 test(pairs(lsmeans(housing.clm, ~ Infl | Type)), joint = TRUE)
 
 
 ###################################################
-### code chunk number 70: using-lsmeans.rnw:759-760
+### code chunk number 71: using-lsmeans.rnw:763-764
 ###################################################
 test(pairs(lsmeans(housing.clm, ~ Cont | Type)), joint = TRUE)
 
 
 ###################################################
-### code chunk number 71: using-lsmeans.rnw:765-766
+### code chunk number 72: using-lsmeans.rnw:769-770
 ###################################################
 ref.grid(housing.clm, mode = "cum.prob")
 
 
 ###################################################
-### code chunk number 72: using-lsmeans.rnw:769-771
+### code chunk number 73: using-lsmeans.rnw:773-775
 ###################################################
 lsmeans(housing.clm, ~ Infl, at = list(cut = "Medium|High"), 
         mode = "cum.prob")
 
 
 ###################################################
-### code chunk number 73: using-lsmeans.rnw:774-776
+### code chunk number 74: using-lsmeans.rnw:778-780
 ###################################################
 summary(lsmeans(housing.clm, ~ Infl, at = list(cut = "Medium|High"), 
                 mode = "linear.predictor"), type = "response")
 
 
 ###################################################
-### code chunk number 74: using-lsmeans.rnw:784-792
+### code chunk number 75: using-lsmeans.rnw:788-796
 ###################################################
 require("nlme")
 options(contrasts = c("contr.treatment", "contr.poly"))
@@ -505,14 +511,14 @@ Chick.nlme
 
 
 ###################################################
-### code chunk number 75: using-lsmeans.rnw:795-797
+### code chunk number 76: using-lsmeans.rnw:799-801
 ###################################################
 cld(lsmeans(Chick.nlme, ~ Diet, param = "asym"))    
 cld(lsmeans(Chick.nlme, ~ Diet, param = "xmid"))    
 
 
 ###################################################
-### code chunk number 76: using-lsmeans.rnw:809-814
+### code chunk number 77: using-lsmeans.rnw:813-818
 ###################################################
 library("MCMCpack")
 counts <- c(18, 17, 15,   20, 10, 20,   25, 13, 12)
@@ -522,13 +528,13 @@ posterior <- MCMCpoisson(counts ~ outcome + treatment, mcmc = 1000)
 
 
 ###################################################
-### code chunk number 77: using-lsmeans.rnw:817-818
+### code chunk number 78: using-lsmeans.rnw:821-822
 ###################################################
 ( post.lsm <- lsmeans(posterior, "treatment") )
 
 
 ###################################################
-### code chunk number 78: using-lsmeans.rnw:821-823
+### code chunk number 79: using-lsmeans.rnw:825-827
 ###################################################
 library("coda")
 summary(as.mcmc(post.lsm))

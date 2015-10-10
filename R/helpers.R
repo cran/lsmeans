@@ -181,7 +181,10 @@ lsm.basis.merMod = function(object, trms, xlev, grid, vcov., ...) {
     dfargs = misc = list()
     if (lme4::isLMM(object)) {
         pbdis = .lsm.is.true("disable.pbkrtest")
-        if (!pbdis && requireNamespace("pbkrtest") && missing(vcov.)) {
+        sizelim = get.lsm.option("pbkrtest.limit")
+        objsize = object.size(object) / 2^30
+        toobig = objsize > sizelim
+        if (!pbdis && !toobig && requireNamespace("pbkrtest") && missing(vcov.)) {
             dfargs = list(unadjV = V, 
                 adjV = pbkrtest::vcovAdj.lmerMod(object, 0))
             V = as.matrix(dfargs$adjV)
@@ -194,7 +197,13 @@ lsm.basis.merMod = function(object, trms, xlev, grid, vcov., ...) {
             }
         }
         else {
-            if(!pbdis) message("Install package 'pbkrtest' to obtain bias corrections and degrees of freedom")
+            if(!pbdis && !("pbkrtest" %in% row.names(installed.packages())))
+                message("Install package 'pbkrtest' to obtain bias corrections and degrees of freedom")
+            else if(toobig)
+                message("Adjusted covariance calculations and K-R degrees of freedom\n",
+                        "have been disabled because the model object exceeds ", signif(sizelim, 2), " GB.\n",
+                        "To enable it, set lsm.options(pbkrtest.limit = ", round(objsize+.01, 2), ") or larger,\n",
+                        "but be warned that this may result in large computation time and memory use.")
             dffun = function(k, dfargs) NA
         }
     }
@@ -686,6 +695,12 @@ lsm.basis.gam = function(object, trms, xlev, grid, ...) {
 ## Alternative to all.vars, but keeps vars like foo$x and foo[[1]] as-is
 ##   Passes ... to all.vars
 All.vars = function(expr, retain = c("\\$", "\\[\\[", "\\]\\]"), ...) {
+    if (!inherits(expr, "formula")) {
+        expr = try(eval(expr), silent = TRUE)
+        if(inherits(expr, "try-error")) {
+            return(character(0))
+        }
+    }
     repl = paste("_Av", seq_along(retain), "_", sep = "")
     for (i in seq_along(retain))
         expr = gsub(retain[i], repl[i], expr)
