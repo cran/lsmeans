@@ -42,7 +42,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
         else if (inherits(cvr, "formula")) {
             if (length(cvr) < 3)
                 stop("Formulas in 'cov.reduce' must be two-sided")
-            lhs = All.vars(cvr)[1]
+            lhs = .all.vars(cvr)[1]
             dep.x[[lhs]] <<- cvr
             cvr = mean 
         }
@@ -130,7 +130,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
 
     # resolve any covariate formulas
     for (xnm in names(dep.x)) {
-        if (!all(All.vars(dep.x[[xnm]]) %in% names(grid)))
+        if (!all(.all.vars(dep.x[[xnm]]) %in% names(grid)))
             stop("Formulas in 'cov.reduce' must predict covariates actually in the model")
         xmod = lm(dep.x[[xnm]], data = data)
         grid[[xnm]] = predict(xmod, newdata = grid)
@@ -144,9 +144,11 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     form = attr(data, "call")$formula
     if (is.null(misc$tran) && (length(form) > 2)) { # No link fcn, but response may be transformed
         lhs = form[-3] ####form[[2]]
-        tran = setdiff(All.vars(lhs, functions = TRUE), c(All.vars(lhs), "~", "cbind"))
-        if(length(tran) == 1)
+        tran = setdiff(.all.vars(lhs, functions = TRUE), c(.all.vars(lhs), "~", "cbind"))
+        if(length(tran) == 1) {
             misc$tran = tran
+            misc$inv.lbl = "response"
+        }
     }
     
     # Take care of multivariate response
@@ -291,7 +293,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     covs.d = names(data)[!isfac]
     
     lbls = attr(trms, "term.labels")
-    M = model.frame(trms, data)
+    M = model.frame(trms, utils::head(data, 2)) #### just need a couple rows
     isfac = sapply(M, function(x) inherits(x, "factor"))
     
     # Character vector of terms in the model frame that are factors ...
@@ -304,7 +306,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     if(length(cterms) == 0) 
         return(cterms)
     # (else) Strip off the function calls
-    cvars = lapply(cterms, function(x) All.vars(reformulate(x)))
+    cvars = lapply(cterms, function(x) .all.vars(reformulate(x)))
     
     # Exclude any variables that are already factors
     intersect(unique(unlist(cvars)), covs.d)
@@ -380,7 +382,7 @@ vcov.ref.grid = function(object, ...) {
         X = object@linfct
         estble = estimability::is.estble(X, object@nbasis, tol) ###apply(X, 1, .is.estble, object@nbasis, tol)
         X[!estble, ] = NA
-        X = X[, !is.na(object@bhat)]
+        X = X[, !is.na(object@bhat), drop = FALSE]
         X %*% tcrossprod(object@V, X)
     }
 }
@@ -438,8 +440,9 @@ get.lsm.option = function(x, default = lsmeans::defaults[[x]]) {
 
 ### Exported defaults for certain options
 defaults = list(
-    estble.tol = 1e-8,
-    pbkrtest.limit = 1
+    estble.tol = 1e-8,        # tolerance for estimability checks
+    disable.pbkrtest = FALSE, # whether to bypass pbkrtest routines for lmerMod
+    pbkrtest.limit = 3000     # limit on N for enabling adj V
 )
 
 # Utility that returns TRUE if getOption("lsmeans")[[opt]] is TRUE
@@ -455,7 +458,7 @@ defaults = list(
 ### Primary reason to do this is with transform = TRUE, then can 
 ### work with linear functions of the transformed predictions
 regrid = function(object, transform = TRUE) {
-    est = .est.se.df(object, do.se = FALSE)
+    est = .est.se.df(object, do.se = TRUE) ###FALSE)
     estble = !(is.na(est[[1]]))
     object@V = vcov(object)[estble, estble, drop=FALSE]
     object@bhat = est[[1]]
@@ -466,13 +469,26 @@ regrid = function(object, transform = TRUE) {
         object@nbasis = object@linfct[, !estble, drop = FALSE]
     if(transform && !is.null(object@misc$tran)) {
         link = attr(est, "link")
-        D = diag(link$mu.eta(object@bhat[estble]))
+        D = .diag(link$mu.eta(object@bhat[estble]))
         object@bhat = link$linkinv(object@bhat)
         object@V = D %*% tcrossprod(object@V, D)
         inm = object@misc$inv.lbl
         if (!is.null(inm))
             object@misc$estName = inm
         object@misc$tran = object@misc$inv.lbl = NULL
+        # override the df function
+        df = est$df
+        if (length(unique(df)) == 1) {
+            object@dfargs = list(df = df[1])
+            object@dffun = function(k, dfargs) dfargs$df
+        }
+        else { # use containment df
+            object@dfargs = list(df = df)
+            object@dffun = function(k, dfargs) {
+                idx = which(zapsmall(k) != 0)
+                ifelse(length(idx) == 0, NA, min(dfargs$df[idx]))
+            }
+        }
     }
     # Nix out things that are no longer needed or valid
     object@grid$.offset. = object@misc$offset.mult =

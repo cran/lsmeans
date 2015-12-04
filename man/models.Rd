@@ -71,7 +71,7 @@ If \pkg{pbkrtest} is not installed, the covariance matrix is not adjusted, degre
 
 The user may disable the use of \pkg{pbkrtest} via \samp{lsm.options(disable.pbkrtest=TRUE)} (this does not disable the \pkg{pbkrtest} package entirely, just its use in \pkg{lsmeans}). The \code{df} argument may be used to specify some other degrees of freedom. Specifying \code{df} is \emph{not} equivalent to disabling \pkg{pbkrtest}, because if not disabled, the covariance matrix is still adjusted.
 
-On a related matter: for very large objects, computation time or memory use may be excessive. Thus, \pkg{pbkrtest} is also automatically disabled if the size of the object (in GB) exceeds the value of \code{get.lsm.option("pbkrtest.limit")}. If desired, the user may use \code{lsm.options} to adjust this limit from the 1GB default.}
+On a related matter: for very large objects, computation time or memory use may be excessive. The amount required depends roughly on the number of observations, \emph{N}, in the design matrix (because a major part of the computation involves inverting an \emph{N x N} matrix). Thus, \pkg{pbkrtest} is automatically disabled if \emph{N} exceeds the value of \code{get.lsm.option("pbkrtest.limit")}. If desired, the user may use \code{lsm.options} to adjust this limit from the default of 3000.}
 \item{glmerMod}{No degrees of freedom are available for these objects, so tests and confidence intervals are asymptotic.}
 }}% lme4
 
@@ -117,7 +117,10 @@ Tests and confidence intervals are asymptotic.}
 \describe{
 \item{multinom}{
 The reference grid includes a pseudo-factor with the same name and levels as the multinomial response. There is an optional \code{mode} argument which should match \code{"prob"} or \code{"latent"}. With \code{mode = "prob"}, the reference-grid predictions consist of the estimated multinomial probabilities. The \code{"latent"} mode returns the linear predictor, recentered so that it averages to zero over the levels of the response variable (similar to sum-to-zero contrasts). Thus each latent variable can be regarded as the log probability at that level minus the average log probability over all levels. 
+
+Please note that, because the probabilities sum to 1 (and the latent values sum to 0) over the multivariate-response levels, all sensible results from \code{lsmeans} must involve that response as one of the factors. For example, if \code{resp} is a response with \eqn{k} levels, \code{lsmeans(model, ~ resp | trt)} will yield the estimated multinomial distribution for each \code{trt}; but \code{lsmeans(model, ~ trt)} will just yield the average probability of \eqn{1/k} for each \code{trt}.
 }}}% nnet, multinom
+
 
 \section{\pkg{ordinal} package}{
 \describe{
@@ -135,6 +138,22 @@ Any grid point that is non-estimable by either the location or the scale model (
 
 Tests and confidence intervals are asymptotic.}
 }}% ordinal
+
+
+\section{\pkg{pscl} package}{
+\describe{
+\item{hurdle, zeroinfl}{
+Two optional arguments -- \code{mode} and \code{lin.pred} -- are provided. The \code{mode} argument has possible values \code{"response"} (the default), \code{"count"}, \code{"zero"}, or \code{"prob0"}. \code{lin.pred} is logical and defaults to \code{FALSE}.
+
+With \code{lin.pred = FALSE}, the results are comparable to those returned by \code{predict(..., type = "response")}, \code{predict(..., type = "count")}, \code{predict(..., type = "zero")}, or \code{predict(..., type = "prob")[, 1]}. See the documentation for \code{\link[pscl]{predict.hurdle}} and \code{\link[pscl]{predict.zeroinfl}}.
+
+The option \code{lin.pred = TRUE} only applies to \code{mode = "count"} and \code{mode = "zero"}. The results returned are on the linear-predictor scale, with the same transformation as the link function in that part of the model. The predictions for a reference grid with \code{mode = "count"}, \code{lin.pred = TRUE}, and \code{type = "response"} will be the same as those obtained with \code{lin.pred = FALSE} and \code{mode = "count"}; however, any LS means derived from these grids will be defferent, because the averaging is done on the log-count scale and the actual count scale, respectively -- thereby producing geometric means versus arithmetic means of the predictions.
+
+If the \code{vcov.} argument is used (see details in \code{\link{ref.grid}}), it must yield a matrix of the same size as would be obtained using \code{\link[pscl]{vcov.hurdle}} or \code{\link[pscl]{vcov.zeroinfl}} with its \code{model} argument set to \code{("full", "count", "zero")} in respective correspondence with \code{mode} of \code{("mean", "count", "zero")}.
+If \code{vcov.} is a function, it must support the \code{model} argument.
+}
+}}% pscl
+
 
 \section{\pkg{rms} package}{
 \describe{

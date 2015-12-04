@@ -98,22 +98,16 @@ lsmeans(fake.lts, ~ B | A)
 
 
 ###################################################
-### code chunk number 14: extending.rnw:165-174
+### code chunk number 14: extending.rnw:194-197
 ###################################################
-lsm.basis.lqs = function(object, trms, xlev, grid, ...) {
-    m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
-    X = model.matrix(trms, m, contrasts.arg = object$contrasts)
-    bhat = coef(object)
-    V = diag(rep(NA, length(bhat)))
-    nbasis = matrix(NA)
-    dffun = function(k, dfargs) NA
-    list(X=X, bhat=bhat, nbasis=nbasis, V=V, dffun=dffun, dfargs=list())
-}
+form = ~ data$x + data[[5]]
+base::all.vars(form)
+lsmeans::.all.vars(form)
 
 
 ###################################################
-### code chunk number 15: extending.rnw:177-178
+### code chunk number 15: extending.rnw:204-205
 ###################################################
-lsmeans(fake.lts, pairwise ~ B)
+.get.offset(terms(~ speed + offset(.03*breaks)), head(warpbreaks))
 
 

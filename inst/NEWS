@@ -1,5 +1,20 @@
 Changelog for 'lsmeans' package
 
+2.21
+    Changed implementation of pbkrtest.limit - now based on
+        number of rows of design matrix.
+    Added support for "hurdle" and zeroinfl" classes (pscl package)
+    In 'regrid', dffun now implements a containment method
+    Additional annotation to clarify when results are on the
+        linear-predictor scale.
+    Added courtesy wrappers pmmeans, pmtreans, pmmip, ... for 
+        those who prefer "predicted marginal means" to
+        "least-squares means". Output is re-labeled as well.
+    Export a few hidden fcns of possible use to package developers
+    Updates to "extending" vignette
+    Miscellaneous bug fixes, including repair to d.f. method from `regrid`
+
+
 2.20-23
     Added 'get.lsm.option()', works like 'getOption()' but with defaults
         obtained from 'lsmeans::defaults'
