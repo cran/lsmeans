@@ -1,4 +1,4 @@
-847357ed5d4e3b0aa78cdaf63849a63f *DESCRIPTION
+44f5419060763b2fa118402a6cd1bc1a *DESCRIPTION
 f6fc79893506475cab4c49428643b754 *NAMESPACE
 81b8d6ed7fa4911183eba1c47d938ce3 *R/MCMC-support.R
 0c1e1e67b366e333c59ca1d4bc906e80 *R/S4-classes.R
@@ -29,12 +29,12 @@ f204c1431e151e2459178e8f4fc8f0e8 *data/fiber.RData
 298a5159a77e201ffe1410cf80282eff *data/nutrition.RData
 2b03398ef2214b51371430e875d964cc *data/oranges.RData
 4ab5a03bf7ccf37ccf2454501fae72ea *inst/CITATION
-e4dc415dcb84b245a45d639dce41b7f5 *inst/NEWS
+47365c2e216944440be19cbb65845cf0 *inst/NEWS
 35d101d38e7efda82971d573740a4731 *inst/doc/extending.R
 123bc8dcc97d87237737786968deaf31 *inst/doc/extending.pdf
 8ba55dabcb58b91cba0b35490fa0bf2b *inst/doc/extending.rnw
 80d5f122232fe7690cc42269481dbffb *inst/doc/using-lsmeans.R
-7e985cd5c3ef49bd0c55ac45a435e664 *inst/doc/using-lsmeans.pdf
+8b15ed5c7a79110b390ba758154a367e *inst/doc/using-lsmeans.pdf
 65057a5829e4f56319d2fa602aa4a614 *inst/doc/using-lsmeans.rnw
 973374a99676131f00cabe705e5fde34 *man/MOats.Rd
 7073c84580b0826caf2d10479596ac4b *man/auto.noise.Rd
