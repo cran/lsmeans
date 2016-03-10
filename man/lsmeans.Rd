@@ -113,6 +113,8 @@ The function \code{lsmobj} may be used to construct an object just like one retu
 When \code{specs} is a \code{character} vector or one-sided formula, an object of class \code{\link[=lsmobj-class]{lsmobj}}. A number of methods are provided for further analysis, including \code{\link[lsmeans]{summary}}, \code{\link[lsmeans]{confint}}, \code{\link[lsmeans]{test}}, \code{\link[lsmeans]{contrast}}, \code{\link[lsmeans]{pairs}}, and \code{\link[lsmeans]{cld}}.
 
 When \code{specs} is a \code{list} or a \code{formula} having a left-hand side, the eturn value is an \code{lsm.list} object, which is simply a \code{list} of \code{lsmobj} objects. Methods for \code{lsm.list} objects are the same as those for \code{lsmobj}, but they apply to only one member of the list, determined by its \code{which} argument.
+
+\bold{Side effect:} When \code{object} is a model, a reference grid is constructed and it is saved as \code{.Last.ref.grid} in the user's enironment (unless this is disabled via \samp{lsm.option(save.ref.grid = FALSE)}). This makes it possible to check what reference grid was used, or to use it as the \code{object} in future \code{lsmeans} calls (and bypass reconstructing it). Similarly, \code{lstrends} also saves its reference grid (but for predicting difference quotients) in the same variable.
 }
 
 \note{If the model formula contains variables that are not predictors (e.g., degree of a polynomial, knots for a spline, etc.), you must add a \code{params} argument to the call}
@@ -135,7 +137,7 @@ Russell V. Lenth
 }
 
 \seealso{
-\code{\link{models}}, \code{\link{pairwise.lsmc}}, \code{\link[multcomp]{glht}}
+\code{\link{ref.grid}}, \code{\link{.Last.ref.grid}}, \code{\link{models}}, \code{\link{pairwise.lsmc}}, \code{\link[multcomp]{glht}}, \code{\link{lsm.options}}
 }
 
 \examples{
@@ -175,14 +177,8 @@ test(Oats.anal)                # Uses 1st element by default
 confint(Oats.anal, which = 4)  # or confint(Oats.anal[[4]])
 
 # Using 'pmmeans' wrapper ...
-# These two calls apply the "bonf" adjustment to different elements...
-pmmeans(warp.lm, eff ~ wool, adjust = "bonf") 
-pmmeans(warp.lm, eff ~ wool, options = list(adjust = "bonf"))
-# Advice: Do one thing at a time if you want non-default adjustments
-#   e.g., wool.lsm <- lsmeans(warp.lm, ~ wool)
-#         summary(wool.lsm, adjust = "bonf")
-#         contrast(wool.lsm, "eff", adjust = "sidak")
-
+pmmeans(warp.lm, ~ wool, 
+    options = list(infer = c(TRUE, TRUE), null = 22, side = ">"))
 
 ### Weights
 # See what's being averaged over in the above

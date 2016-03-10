@@ -107,7 +107,7 @@ lsmeans.list = function(object, specs, ...) {
 
 # Generic for after we've gotten specs in character form
 lsmeans.character = function(object, specs, ...) {
-    UseMethod("lsmeans.character")####, object)
+    UseMethod("lsmeans.character")
 }
 
 # Needed for model objects
@@ -263,8 +263,8 @@ contrast = function(object, ...)
     UseMethod("contrast")
 
 contrast.ref.grid = function(object, method = "eff", interaction = FALSE, 
-        by, adjust, offset = NULL, name = "contrast", 
-        options = getOption("lsmeans")$contrast, ...) 
+        by, offset = NULL, name = "contrast", 
+        options = getOption("lsmeans")$contrast, adjust, ...) 
 {
     if(missing(by)) 
         by = object@misc$by.vars
@@ -411,8 +411,11 @@ contrast.ref.grid = function(object, method = "eff", interaction = FALSE,
             misc$tran = "log"
         }
         else
-            misc$tran = NULL
+            misc$tran = misc$tran.mult = NULL
     }
+    
+    # ensure we don't inherit inappropriate settings
+    misc$null = misc$delta = misc$side = NULL
     
     object@roles$predictors = "contrast"
     levels = list()
@@ -600,13 +603,16 @@ lstrends = function(model, specs, var, delta.var=.01*rng, data, ...) {
     .zaptran = function(obj) {
         if (is(obj, "ref.grid") && !is.null(obj@misc$tran)) {
             obj@misc$orig.tran = result@misc$tran
-            obj@misc$tran = NULL
+            obj@misc$tran = obj@misc$tran.mult = NULL
         }
         obj
     }
     
     RG@linfct = newlf
     RG@roles$trend = var
+    
+    .save.ref.grid(.zaptran(RG))  # save in .Last.ref.grid, if enabled
+    
     args = list(object=RG, specs=specs, ...)
     args$at = args$cov.reduce = args$mult.levs = args$vcov. = NULL
     result = do.call("lsmeans", args)

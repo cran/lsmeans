@@ -145,7 +145,20 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     if (is.null(misc$tran) && (length(form) > 2)) { # No link fcn, but response may be transformed
         lhs = form[-3] ####form[[2]]
         tran = setdiff(.all.vars(lhs, functions = TRUE), c(.all.vars(lhs), "~", "cbind"))
-        if(length(tran) == 1) {
+        if(length(tran) > 0) {
+            tran = paste(tran, collapse = ".")  
+            # length > 1: Almost certainly unsupported, but facilitates a more informative error message
+            
+            # Look for a multiplier, e.g. 2*sqrt(y)
+            tst = strsplit(strsplit(as.character(form[2]), "\\(")[[1]][1], "\\*")[[1]]
+            if(length(tst) > 1) {
+                mul = suppressWarnings(as.numeric(tst[1]))
+                if(!is.na(mul))
+                    misc$tran.mult = mul
+                tran = gsub("\\*\\.", "", tran)
+            }
+            if (tran == "linkfun")
+                tran = as.list(environment(trms))
             misc$tran = tran
             misc$inv.lbl = "response"
         }
@@ -270,15 +283,27 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
         if (is.character(hook))
             hook = get(hook)
         result@misc$postGridHook = NULL
-        hook(result)
+        result = hook(result)
     }
-    else
-        result
+    
+    .save.ref.grid(result)
+    result
 }
 
 
 #### End of ref.grid ------------------------------------------
 
+# local utility to identify ref.grid that is not an lsmobj
+.is.true.ref.grid = function(object) {
+    is(object, "ref.grid") && !is(object, "lsmobj")
+}
+
+# local utility to save each newly constructed ref.grid, if enabled
+# Goes into global environment unless .Last.ref.grid is found further up
+.save.ref.grid = function(object) {
+    if(get.lsm.option("save.ref.grid") && .is.true.ref.grid(object))
+        assign(".Last.ref.grid", object, inherits = TRUE)
+}
 
 
 
@@ -359,7 +384,10 @@ str.ref.grid <- function(object, ...) {
         cat("\n")
     }
     if(!is.null(tran <- object@misc$tran)) {
-        if (is.list(tran)) tran = "custom - see slot(, \"misc\")$tran"
+        if (is.list(tran)) 
+            tran = ifelse(is.null(tran$name), "custom - see slot(, \"misc\")$tran", tran$name)
+        if (!is.null(mul <- object@misc$tran.mult))
+            tran = paste0(mul, "*", tran)
         cat(paste("Transformation:", dQuote(tran), "\n"))
     }
 }
@@ -391,9 +419,9 @@ vcov.ref.grid = function(object, ...) {
 # Method to alter contents of misc slot
 update.ref.grid = function(object, ..., silent = FALSE) {
     args = list(...)
-    valid.misc = c("adjust","alpha","avgd.over","by.vars","df",
+    valid.misc = c("adjust","alpha","avgd.over","by.vars","delta","df",
         "initMesg","estName","estType","famSize","infer","inv.lbl",
-        "level","methdesc","predict.type","pri.vars","tran")
+        "level","methdesc","null","predict.type","pri.vars","side","tran","tran.mult")
     valid.slots = slotNames(object)
     valid.choices = union(valid.misc, valid.slots)
     misc = object@misc
@@ -436,7 +464,7 @@ lsm.options = function(...) {
 }
 
 # equivalent of getOption()
-get.lsm.option = function(x, default = lsmeans::defaults[[x]]) {
+get.lsm.option = function(x, default = defaults.lsm[[x]]) {
     opts = getOption("lsmeans", list())
     if(is.null(default) || x %in% names(opts))
         opts[[x]]
@@ -445,10 +473,11 @@ get.lsm.option = function(x, default = lsmeans::defaults[[x]]) {
 }
 
 ### Exported defaults for certain options
-defaults = list(
+defaults.lsm = list(
     estble.tol = 1e-8,        # tolerance for estimability checks
     disable.pbkrtest = FALSE, # whether to bypass pbkrtest routines for lmerMod
-    pbkrtest.limit = 3000     # limit on N for enabling adj V
+    pbkrtest.limit = 3000,    # limit on N for enabling adj V
+    save.ref.grid = TRUE      # save new ref.grid in .Last.ref.grid
 )
 
 # Utility that returns TRUE if getOption("lsmeans")[[opt]] is TRUE
@@ -463,7 +492,11 @@ defaults = list(
 ### Returned ref.grid object has linfct = I and bhat = estimates
 ### Primary reason to do this is with transform = TRUE, then can 
 ### work with linear functions of the transformed predictions
-regrid = function(object, transform = TRUE) {
+regrid = function(object, transform = c("response", "log", "none"), inv.log.lbl = "response") {
+    if (is.logical(transform))   # for backward-compatibility
+        transform = ifelse(transform, "response", "none")
+    else
+        transform = match.arg(transform)
     est = .est.se.df(object, do.se = TRUE) ###FALSE)
     estble = !(is.na(est[[1]]))
     object@V = vcov(object)[estble, estble, drop=FALSE]
@@ -473,28 +506,39 @@ regrid = function(object, transform = TRUE) {
         object@nbasis = estimability::all.estble
     else
         object@nbasis = object@linfct[, !estble, drop = FALSE]
-    if(transform && !is.null(object@misc$tran)) {
+    
+    # override the df function
+    df = est$df
+    test.df = diff(range(df))
+    if (is.na(test.df) || test.df < .001) {
+        object@dfargs = list(df = mean(df))
+        object@dffun = function(k, dfargs) dfargs$df
+    }
+    else { # use containment df
+        object@dfargs = list(df = df)
+        object@dffun = function(k, dfargs) {
+            idx = which(zapsmall(k) != 0)
+            ifelse(length(idx) == 0, NA, min(dfargs$df[idx]))
+        }
+    }
+    
+    if(transform %in% c("response", "log") && !is.null(object@misc$tran)) {
         link = attr(est, "link")
         D = .diag(link$mu.eta(object@bhat[estble]))
-        object@bhat = link$linkinv(object@bhat)
+        object@bhat = sapply(object@bhat, function(x) 
+            ifelse(link$valideta(x), link$linkinv(x), 0))
         object@V = D %*% tcrossprod(object@V, D)
         inm = object@misc$inv.lbl
         if (!is.null(inm))
             object@misc$estName = inm
-        object@misc$tran = object@misc$inv.lbl = NULL
-        # override the df function
-        df = est$df
-        if (length(unique(df)) == 1) {
-            object@dfargs = list(df = df[1])
-            object@dffun = function(k, dfargs) dfargs$df
-        }
-        else { # use containment df
-            object@dfargs = list(df = df)
-            object@dffun = function(k, dfargs) {
-                idx = which(zapsmall(k) != 0)
-                ifelse(length(idx) == 0, NA, min(dfargs$df[idx]))
-            }
-        }
+        object@misc$tran = object@misc$tran.mult = object@misc$inv.lbl = NULL
+    }
+    if (transform == "log") {
+        D = .diag(1/object@bhat)
+        object@V = D %*% tcrossprod(object@V, D)
+        object@bhat = log(object@bhat)
+        object@misc$tran = "log"
+        object@misc$inv.lbl = inv.log.lbl
     }
     # Nix out things that are no longer needed or valid
     object@grid$.offset. = object@misc$offset.mult =

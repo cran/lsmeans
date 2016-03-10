@@ -3,7 +3,7 @@
 \alias{update.ref.grid}
 \alias{lsm.options}
 \alias{get.lsm.option}
-\alias{defaults}
+\alias{defaults.lsm}
 \alias{pmm.options}
 \alias{get.pmm.option}
 
@@ -20,7 +20,7 @@ In addition, the user may set defaults for all objects using \samp{options(lsmea
 \S3method{update}{ref.grid}(object, ..., silent = FALSE)
 
 lsm.options(...)
-get.lsm.option(x, default = lsmeans::defaults[[x]])
+get.lsm.option(x, default = defaults.lsm[[x]])
 
 pmm.options(...)
 get.pmm.option(...)
@@ -42,7 +42,9 @@ Arguments specifying elements' names and their new values.
 In \code{update}, the names in \code{\dots} are partially matched against those that are valid, and if a match is found, it adds or replaces the current setting. The valid names are
 
 \describe{
-\item{\code{tran}}{(\code{list} or \code{character}) specifies the transformation which, when inverted, determines the results displayed by \code{\link{summary}}, \code{\link{predict}}, or \code{\link{lsmip}} when \code{type="response"}. The value may be the name of a standard transformation from \code{\link{make.link}}, or, for a custom transformation, a \code{list} containing at least the functions \code{linkinv} (the inverse of the transformation) and \code{mu.eta} (the derivative thereof). See the Examples. }
+\item{\code{tran}}{(\code{list} or \code{character}) specifies the transformation which, when inverted, determines the results displayed by \code{\link{summary}}, \code{\link{predict}}, or \code{\link{lsmip}} when \code{type="response"}. The value may be the name of a standard transformation from \code{\link{make.link}} or additional ones supported by name, such as \code{log2}; or, for a custom transformation, a \code{list} containing at least the functions \code{linkinv} (the inverse of the transformation) and \code{mu.eta} (the derivative thereof). The \code{\link{make.tran}} function returns such lists for a number of popular transformations. See the help page of \code{\link{make.tran}} for details as well as information on the additional named transformations that are supported. }
+
+\item{\code{tran.mult}}{Multiple for \code{tran}. For example, for the response transformation \samp{2*sqrt(y)} (or \samp{sqrt(y) + sqrt(y + 1)}, for that matter), we should have \code{tran = "sqrt"} and \code{tran.mult = 2}. If absent, a multiple of 1 is assumed.}
 
 \item{\code{estName}}{(\code{character}) is the column label used for displaying predictions or LS means.}
 
@@ -66,6 +68,12 @@ In \code{update}, the names in \code{\dots} are partially matched against those 
 
 \item{\code{df}}{(numeric) overrides the default degrees of freedom with a specified single value.}
 
+\item{\code{null}}{(numeric) null hypothesis for \code{summary} or \code{test} (taken to be zero if missing).}
+
+\item{\code{side}}{(numeric or character) \code{side} specification for for \code{summary} or \code{test} (taken to be zero if missing).}
+
+\item{\code{delta}}{(numeric) \code{delta} specification for \code{summary} or \code{test} (taken to be zero if missing).}
+
 \item{\code{predict.type}}{(character) sets the default method of displaying predictions in \code{\link{summary}}, \code{\link{predict}}, and \code{\link{lsmip}}. Valid values are \code{"link"} (with synonyms \code{"lp"} and \code{"linear"}), or \code{"response"}.}
 
 \item{\code{avgd.over}}{(\code{character)} vector) are the names of the variables whose levels are averaged over in obtaining marginal averages of predictions, i.e., LS means. Changing this might produce a misleading printout, but setting it to \code{character(0)} will suppress the \dQuote{averaged over} message in the summary.}
@@ -86,7 +94,7 @@ In \code{lsm.options}, we may set or change the default values for the above att
 \item{\code{lsmeans}}{A named \code{list} of defaults for objects created by \code{\link{lsmeans}} (or \code{\link{lstrends}}).}
 \item{\code{contrast}}{A named \code{list} of defaults for objects created by \code{\link{contrast}} (or \code{\link{pairs}}).}
 \item{\code{summary}}{A named \code{list} of defaults used by the methods \code{\link{summary}}, \code{\link{predict}}, and \code{\link{lsmip}}. The only option that can affect the latter two is \code{"predict.method"}.}
-\item{\code{estble.tol}}{Tolerance for determining estimability in rank-deficient cases. If absent, the value in \code{lsmeans::defaults$estble.tol)} is used.}
+\item{\code{estble.tol}}{Tolerance for determining estimability in rank-deficient cases. If absent, the value in \code{defaults.lsm$estble.tol)} is used.}
 \item{(others)}{Other options may be accessed by support code for particular model classes (see \code{\link{models}}). For example, the \code{disable.pbkrtest} and \code{pbkrtest.limit} options affect whether approximate degrees of freedom are computed for \code{lmerMod} objects (\pkg{lme4} package).}
 } % end \describe
 } % end subsection
@@ -107,7 +115,7 @@ Unlike the \code{update} method for model classes (\code{lm}, \code{glm}, etc.),
 %% ~Make other sections like Warning with \section{Warning }{....} ~
 
 \seealso{
-\code{\link{summary}}
+\code{\link{summary}}, \code{\link{make.tran}}
 }
 \examples{
 # An altered log transformation
@@ -128,6 +136,7 @@ lsm.options(ref.grid = list(level = .90),
 # AS WELL AS lsmeans called with a model object (since it creates a 
 # reference grid). In addition, when we call 'contrast', 'pairs', etc.,
 # confidence intervals rather than tests are displayed by default.
+}
 
 \dontrun{
 lsm.options(disable.pbkrtest = TRUE)
@@ -138,7 +147,8 @@ lsm.options(disable.pbkrtest = TRUE)
 # See tolerance being used for determining estimability
 get.lsm.option("estble.tol")
 }
-}
+
+
 % Add one or more standard keywords, see file 'KEYWORDS' in the
 % R documentation directory.
 \keyword{ models }

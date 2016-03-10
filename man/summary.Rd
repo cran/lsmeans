@@ -14,8 +14,9 @@
 \alias{as.mcmc}
 \alias{as.mcmc.ref.grid}
 \alias{[.ref.grid}
-%\alias{xtable.ref.grid}
-%\alias{xtable.summary.ref.grid}
+\alias{xtable.ref.grid}
+\alias{xtable.summary.ref.grid}
+\alias{print.xtable.lsm}
 
 
 %- Also NEED an '\alias' for EACH other topic documented here.
@@ -27,7 +28,7 @@ Use these methods to summarize, print, plot, or examine objects of class \code{"
 }
 \usage{
 \method{summary}{ref.grid}(object, infer, level, adjust, by, type, df, 
-    null = 0, delta = 0, side = 0, ...)
+    null, delta, side, ...)
 
 \method{predict}{ref.grid}(object, type, ...)
 
@@ -40,10 +41,13 @@ Use these methods to summarize, print, plot, or examine objects of class \code{"
 \method{print}{ref.grid}(x, ...)
 \method{print}{summary.ref.grid}(x, ..., digits = NULL, quote = FALSE, right = TRUE)
 
-%\method{xtable}{ref.grid}(x, caption = NULL, label = NULL, align = NULL, 
-%    digits = NULL, display = NULL, auto = FALSE, ...)
-%\method{xtable}{summary.ref.grid}(x, caption = NULL, label = NULL, align = NULL, 
-%    digits = NULL, display = NULL, auto = FALSE, ...)
+\method{xtable}{ref.grid}(x, caption = NULL, label = NULL, align = NULL, 
+    digits = 4, display = NULL, auto = FALSE, ...)
+\method{xtable}{summary.ref.grid}(x, caption = NULL, label = NULL, align = NULL, 
+    digits = 4, display = NULL, auto = FALSE, ...)
+\method{print}{xtable.lsm}(x, type = getOption("xtable.type", "latex"),
+    include.rownames = FALSE, sanitize.message.function = footnotesize,
+    ...)
 
 \method{plot}{lsmobj}(x, y, type, intervals = TRUE, comparisons = FALSE,
     alpha = 0.05, adjust = "tukey", int.adjust, ...)
@@ -52,7 +56,7 @@ Use these methods to summarize, print, plot, or examine objects of class \code{"
 
 \method{vcov}{ref.grid}(object, ...)
 
-regrid (object, transform = TRUE)
+regrid (object, transform = c("response", "log", "none"), inv.log.lbl = "response")
 
 \method{as.mcmc}{ref.grid}(x, names = TRUE, ...)
 }
@@ -74,7 +78,9 @@ Character value naming the method used to adjust \eqn{p} values or confidence li
 Character name(s) of variables to use for grouping. This affects the family of tests considered in adjusted \emph{P} values. The printed display of the summary is grouped by the \code{by} variables.
 }
   \item{type}{
-Type of prediction desired. This only has an effect if there is a known transformation or link function. \code{"response"} specifies that the inverse transformation be applied. Other valid values are \code{"link"}, \code{"lp"}, and \code{"linear"}; these are equivalent, and request that results be shown for the linear predictor. The default is \code{"link"}, unless the \code{"predict.type"} option is in force; see \code{\link{lsm.options}}.
+Type of prediction desired (except in \code{print.xtable}). This only has an effect if there is a known transformation or link function. \code{"response"} specifies that the inverse transformation be applied. Other valid values are \code{"link"}, \code{"lp"}, and \code{"linear"}; these are equivalent, and request that results be shown for the linear predictor. The default is \code{"link"}, unless the \code{"predict.type"} option is in force; see \code{\link{lsm.options}}.
+
+Note that \code{type} is also an argument for the \code{print.xtable} method; it is passed to \code{\link[xtable]{print.xtableList}} in the \pkg{xtable} package.
 }
   \item{df}{
 If non-missing a constant number of degrees of freedom to use in constructing confidence intervals and \emph{P} values (\code{NA} specifies asymptotic results).
@@ -92,17 +98,17 @@ The object to be subsetted, printed, plotted, or converted.
   \item{intervals}{If \code{TRUE}, confidence intervals are plotted for each estimate}
   \item{comparisons}{If \code{TRUE}, \dQuote{comparison arrows} are added to the plot, in such a way that the degree to which arrows overlap reflects as much as possible the significance of the comparison of the two estimates.}
   \item{alpha}{The \code{alpha} argument to use in constructing comparison arrows.}
-  \item{int.adjust}{the multiplicity adjustment method for the plotted confidence intervals; if missing, it defaults to the object's internal \code{adjust} setting (see \code{\link{update}}). (Note: the \code{adjust} argument in \code{plot} sets the adjust method for the comparison arrows, not the confidennce intervals.)}
-  \item{transform}{Logical value; if true, the inverse transformation is applied to the estimates in the grid}
+  \item{int.adjust}{the multiplicity adjustment method for the plotted confidence intervals; if missing, it defaults to the object's internal \code{adjust} setting (see \code{\link{update}}). (Note: the \code{adjust} argument in \code{plot} sets the adjust method for the comparison arrows, not the confidence intervals.)}
+  \item{transform}{Character value. If \code{"response"}, the inverse transformation is applied to the estimates in the grid; if \code{"log"}, the results are formulated as if the response had been \code{log}-transformed; if \code{"none"}, predictions thereof are on the same scale as in \code{object}, and any internal transformation information is preserved. For compatibility with past versions, \code{transform} may also be logical; \code{TRUE} is taken as \code{"response"}, and \code{FALSE} as \code{"none"}.}
+  \item{inv.log.lbl}{Character value. This applies only when \code{transform = "log"}, and is used to label the predictions if subsequently summarized with \code{type = "response"}.}
   \item{names}{Logical scalar or vector specifying whether variable names are appended to levels in the column labels for the \code{as.mcmc} result -- e.g., column names of \code{treat A} and \code{treat B} versus  just \code{A} and \code{B}. When there is more than one variable involved, the elements of \code{names} are used cyclically.}
-%\item{\dots, digits, quote, right, caption, label, align, display, auto, xlab, ylab, layout}
-  \item{\dots, digits, quote, right, xlab, ylab, layout}{For summaries, these are additional arguments passed to other methods including \code{\link{print.data.frame}}, 
-%\code{\link{xtable}}, 
+\item{\dots, digits, quote, right, caption, label, align, display, auto, include.rownames, sanitize.message.function, xlab, ylab, layout}{For summaries, these are additional arguments passed to other methods including \code{\link{print.data.frame}}, 
+\code{\link{xtableList}}, \code{\link{print.xtableList}},
 \code{\link{update}}, or \code{\link{dotplot}} as appropriate. If not specified, appropriate defaults are used. For example, the default \code{layout} is one column of horizontal panels or one row of vertical panels.}
 }
 \details{
 \bold{Defaults:}
-The \code{misc} slot in \code{object} contains default values for \code{by}, \code{infer}, \code{level}, \code{adjust}, and \code{type}. These defaults vary depending on the code that created the object. The \code{\link{update}} method may be used to change these defaults. In addition, any options set using \samp{lsm.options(summary=...)} will trump those stored in the object's \code{misc} slot.
+The \code{misc} slot in \code{object} contains default values for \code{by}, \code{infer}, \code{level}, \code{adjust}, \code{type}, \code{null}, \code{side}, and \code{delta}. These defaults vary depending on the code that created the object. The \code{\link{update}} method may be used to change these defaults. In addition, any options set using \samp{lsm.options(summary=...)} will trump those stored in the object's \code{misc} slot.
 
 \bold{Transformations and links:}
 With \code{type="response"}, the transformation assumed can be found in \samp{object@misc$tran}, and its label, for the summary is in \samp{object@misc$inv.lbl}. At this time, \code{tran} must be one of the named transformations valid for \code{\link{make.link}}. Any \eqn{t} or \eqn{z} tests are still performed on the scale of the linear predictor, not the inverse-transformed one. Similarly, confidence intervals are computed on the linear-predictor scale, then inverse-transformed.
@@ -123,6 +129,9 @@ For P-value adjustments only, the other Bonferroni-inequality-based adjustment m
 Also, if an adjustment method is not appropriate (e.g., using \code{"tukey"} with one-sided tests, or with results that are not pairwise comparisons), a more appropriate method (usually \code{"sidak"}) is substituted. 
 
 In some cases, confidence and \eqn{p}-value adjustments are only approximate -- especially when the degrees of freedom or standard errors vary greatly within the family of tests. The \code{"mvt"} method is always the correct one-step adjustment, but it can be very slow. One may use \code{\link{as.glht}} with methods in the \pkg{multcomp} package to obtain non-conservative multi-step adjustments to tests.
+
+\bold{\code{xtable}-related methods:}
+The \code{\link{xtable}} methods actually use \code{\link{xtableList}}, because of the ability to display messages such as those for P-value adjustments. These methods return an object of class \code{"xtable.lsm"} -- an extension of \code{"xtableList"}. Unlike other \code{xtable} methods, the number of digits defaults to 4; and degrees of freedom and \emph{t} ratios are always formatted independently of \code{digits}. The \code{print} method uses \code{\link{print.xtableList}}, and any \code{\dots} arguments are passed there.
 
 \bold{\code{rbind} and \code{[} methods:}
 \code{rbind} can be used to combine two or more reference grids into one. The \code{"["} method for \code{ref.grid}s may be used to obtain a subset. The primary reason for doing this would be to redefine the family of tests to which a P-value adjustment method applies. In \code{rbind}, the variables defined in the objects' grids are merged into one grid, and the returned object has no \dQuote{by} variables and the multiplicity adjustment method set to \code{"mvt"} (as this is likely the only appropriate one).
@@ -156,7 +165,7 @@ When the object's \code{post.beta} slot is non-trivial, \code{as.mcmc} will retu
 }
 
 \value{
-The \code{summary} method for \code{"ref.grid"} objects returns an object of class \code{"summary.ref.grid"}, which extends \code{"data.frame"}. \code{plot} returns an object of class \code{"trellis"}. \code{vcov} returns the covariance matrix of the product of the object's \code{linfct} and \code{bhat} slots. \code{as.mcmc} returns a \pkg{coda} \code{mcmc} object.
+The \code{summary} method for \code{"ref.grid"} objects returns an object of class \code{"summary.ref.grid"}, which extends \code{"data.frame"}. \code{xtable} returns an object of class \code{"xtable.lsm"}, as explained in details. \code{plot} returns an object of class \code{"trellis"}. \code{vcov} returns the covariance matrix of the product of the object's \code{linfct} and \code{bhat} slots. \code{as.mcmc} returns a \pkg{coda} \code{mcmc} object.
 }
 %%\references{}
 \author{

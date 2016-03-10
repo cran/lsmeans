@@ -8,7 +8,6 @@
     else 0
 }
 
-
 # utility fcn to get est's, std errors, and df
 # new arg: do.se -- if FALSE, just do the estimates and return 0 for se and df
 # returns a data.frame with an add'l "link" attribute if misc$tran is non-null
@@ -52,13 +51,26 @@
     names(result) = c(misc$estName, "SE", "df")
 
     if (!is.null(misc$tran) && (misc$tran != "none")) {
-        if(is.character(misc$tran)) {
-            link = try(make.link(misc$tran), silent=TRUE)
-            if (!inherits(link, "try-error"))
-                attr(result, "link") = link
-        }
+        link = if(is.character(misc$tran))
+            .make.link(misc$tran)
         else if (is.list(misc$tran))
-            attr(result, "link") = misc$tran
+            misc$tran
+        else 
+            NULL
+        
+        if (is.list(link)) {  # See if multiple of link is requested
+            if (!is.null(misc$tran.mult))
+                link$mult = misc$tran.mult
+            if (!is.null(link$mult))
+                link = with(link, list(
+                    linkinv = function(eta) linkinv(eta / mult),
+                    mu.eta = function(eta) mu.eta(eta / mult) / mult,
+                    name = paste0(round(mult, 3), "*", name)))
+        }
+        
+        if (!is.null(link) && is.null(link$name))
+                link$name = "linear-predictor"
+        attr(result, "link") = link
     }
     result
 }
@@ -336,7 +348,39 @@ predict.ref.grid <- function(object, type, ...) {
 
 # S3 summary method
 summary.ref.grid <- function(object, infer, level, adjust, by, type, df, 
-                             null = 0, delta = 0, side = 0, ...) {
+                             null, delta, side, ...) {
+    ### For missing arguments, get from misc, else default    
+    if(missing(infer))
+        infer = object@misc$infer
+    if(missing(level))
+        level = object@misc$level
+    if(missing(adjust))
+        adjust = object@misc$adjust
+    if(missing(by))
+        by = object@misc$by.vars
+    
+    if (missing(type))
+        type = .get.predict.type(object@misc)
+    else
+        type = .validate.type(type)
+    
+    if(missing(df)) 
+        df = object@misc$df
+    if(!is.null(df))
+        object@dffun = function(k, dfargs) df
+    
+    # for missing args that default to zero unless provided or in misc slot
+    .nul.eq.zero = function(val) {
+        if(is.null(val)) 0
+        else val
+    }
+    if(missing(null))
+        null = .nul.eq.zero(object@misc$null)
+    if(missing(delta))
+        delta = .nul.eq.zero(object@misc$delta)
+    if(missing(side))
+        side = .nul.eq.zero(object@misc$side)
+    
     # update with any "summary" options
     opt = get.lsm.option("summary")
     if(!is.null(opt)) {
@@ -344,9 +388,6 @@ summary.ref.grid <- function(object, infer, level, adjust, by, type, df,
         object = do.call("update.ref.grid", opt)
     }
     
-    if(missing(df)) df = object@misc$df
-    if(!is.null(df))
-        object@dffun = function(k, dfargs) df
     
     # reconcile all the different ways we could specify the alternative
     # ... and map each to one of the first 3 subscripts
@@ -361,35 +402,24 @@ summary.ref.grid <- function(object, infer, level, adjust, by, type, df,
                      c(object@roles$responses, ".offset.", ".wgt."))
     lbls = object@grid[lblnms]
     
-    ### implement my 'variable defaults' scheme    
-    if(missing(infer)) infer = object@misc$infer
-    if(missing(level)) level = object@misc$level
-    if(missing(adjust)) adjust = object@misc$adjust
-    if(missing(by)) by = object@misc$by.vars
-    
-    if (missing(type))
-        type = .get.predict.type(object@misc)
-    else
-        type = .validate.type(type)
-    
     zFlag = (all(is.na(result$df)))
     inv = (type == "response") # flag to inverse-transform
-    
+    link = attr(result, "link")
+    if (inv && is.null(link))
+        inv = FALSE
+
     if ((length(infer) == 0) || !is.logical(infer)) 
         infer = c(FALSE, FALSE)
     if(length(infer == 1)) 
         infer = c(infer,infer)
     
     if(inv && !is.null(object@misc$tran)) {
-        link = attr(result, "link")
         if (!is.null(object@misc$inv.lbl))
             names(result)[1] = object@misc$inv.lbl
         else
             names(result)[1] = "lsresponse"
     }
-    else
-        link = NULL
-    
+
     attr(result, "link") = NULL
     estName = names(result)[1]
     
@@ -397,10 +427,13 @@ summary.ref.grid <- function(object, infer, level, adjust, by, type, df,
     
     ### Add an annotation when we show results on lp scale and
     ### there is a transformation
-    if (!inv && !is.null(linkName <- object@misc$tran)) {
-        if (!is.character(linkName))
-            linkName = "linear predictor (not response)"
-        mesg = c(mesg, paste("Results are given on the", linkName, "scale."))
+    if (!inv && !is.null(link)) {
+        mesg = c(mesg, paste("Results are given on the", link$name, "(not the response) scale."))
+    }
+    if (inv && !is.null(link$unknown)) {
+        mesg = c(mesg, paste0('Unknown transformation "', link$name, '": no transformation done'))
+        inv = FALSE
+        link = NULL
     }
     
     # et = 1 if a prediction, 2 if a contrast (or unmatched or NULL), 3 if pairs
@@ -428,11 +461,14 @@ summary.ref.grid <- function(object, infer, level, adjust, by, type, df,
         cnm = if (zFlag) c("asymp.LCL", "asymp.UCL") else c("lower.CL","upper.CL")
         result[[cnm[1]]] = result[[1]] + cv[, 1]*result$SE
         result[[cnm[2]]] = result[[1]] + cv[, 2]*result$SE
-        if (!is.null(link)) {
-            result[[cnm[1]]] = link$linkinv(result[[cnm[1]]])
-            result[[cnm[2]]] = link$linkinv(result[[cnm[2]]])
-        }
         mesg = c(mesg, paste("Confidence level used:", level), acv$mesg)
+        if (inv) {
+            clims = with(link, cbind(linkinv(result[[cnm[1]]]), linkinv(result[[cnm[2]]])))
+            idx = if (all(clims[ ,1] <= clims[, 2])) 1:2 else 2:1
+            result[[cnm[1]]] = clims[, idx[1]]
+            result[[cnm[2]]] = clims[, idx[2]]
+            mesg = c(mesg, paste("Intervals are back-transformed from the", link$name, "scale"))
+        }
     }
     if(infer[2]) { # add tests
         if (!all(null == 0)) {
@@ -461,17 +497,19 @@ summary.ref.grid <- function(object, infer, level, adjust, by, type, df,
         if(tail != 0) 
             mesg = c(mesg, paste("P values are ", ifelse(tail<0,"left-","right-"),"tailed", sep=""))
         if (!is.null(link)) 
-            mesg = c(mesg, "Tests are performed on the linear-predictor scale")
+            mesg = c(mesg, paste("Tests are performed on the", link$name, "scale"))
     }
-    if (!is.null(link)) {
-        result[["SE"]] = link$mu.eta(result[[1]]) * result[["SE"]]
-        result[[1]] = link$linkinv(result[[1]])
+    if (inv) {
+        result[["SE"]] = with(link, abs(mu.eta(result[[1]]) * result[["SE"]]))
+        result[[1]] = with(link, linkinv(result[[1]]))
     }
     
-    if (length(object@misc$avgd.over) > 0)
-        mesg = c(paste("Results are averaged over the levels of:",
+    if (length(object@misc$avgd.over) > 0) {
+        qual = attr(object@misc$avgd.over, "qualifier")
+        if (is.null(qual)) qual = ""
+        mesg = c(paste0("Results are averaged over", qual, " the levels of: ",
                        paste(object@misc$avgd.over, collapse = ", ")), mesg)
-    
+    }
     summ = cbind(lbls, result)
     attr(summ, "estName") = estName
     attr(summ, "clNames") = cnm  # will be NULL if infer[1] is FALSE
@@ -499,6 +537,7 @@ print.summary.ref.grid = function(x, ..., digits=NULL, quote=FALSE, right=TRUE) 
     x.save = x
     if (!is.null(x$df)) x$df = round(x$df, 2)
     if (!is.null(x$t.ratio)) x$t.ratio = round(x$t.ratio, 3)
+    if (!is.null(x$z.ratio)) x$z.ratio = round(x$z.ratio, 3)
     if (!is.null(x$p.value)) {
         fp = x$p.value = format(round(x$p.value,4), nsmall=4, sci=FALSE)
         x$p.value[fp=="0.0000"] = "<.0001"

@@ -1,5 +1,5 @@
 
-R Under development (unstable) (2016-01-25 r70000) -- "Unsuffered Consequences"
+R Under development (unstable) (2016-03-09 r70294) -- "Unsuffered Consequences"
 Copyright (C) 2016 The R Foundation for Statistical Computing
 Platform: x86_64-w64-mingw32/x64 (64-bit)
 
@@ -296,6 +296,14 @@ Loading required package: multcomp
 Loading required package: mvtnorm
 Loading required package: survival
 Loading required package: TH.data
+Loading required package: MASS
+
+Attaching package: 'TH.data'
+
+The following object is masked from 'package:MASS':
+
+    geyser
+
 > # This will fail because glht can't deal with rank deficiency
 > # Hope this changes.
 > try( as.glht(pairs(warp.lsm)) )
@@ -430,7 +438,7 @@ wool = B:
  M       3.332706 0.1206070 38 3.088550 3.576862
  H       2.933453 0.1229958 38 2.684461 3.182445
 
-Results are given on the log scale. 
+Results are given on the log (not the response) scale. 
 Confidence level used: 0.95 
 > summary(warp.lsm5, type = "resp")
 wool = A:
@@ -446,6 +454,7 @@ wool = B:
  H       18.79240 2.311387 38 14.65030 24.10561
 
 Confidence level used: 0.95 
+Intervals are back-transformed from the log scale 
 > 
 > ## In a GLM
 > # One of the glm examples...
@@ -460,7 +469,7 @@ Confidence level used: 0.95
  3       2.751535 0.1458650 NA  2.465645  3.037425
 
 Results are averaged over the levels of: treatment 
-Results are given on the log scale. 
+Results are given on the log (not the response) scale. 
 Confidence level used: 0.95 
 > # un-log the results to obtain rates
 > summary(lsm.D93, type = "resp")
@@ -471,16 +480,17 @@ Confidence level used: 0.95
 
 Results are averaged over the levels of: treatment 
 Confidence level used: 0.95 
+Intervals are back-transformed from the log scale 
 > 
 > # un-log some comparisons to obtain ratios
 > summary(contrast(lsm.D93, "trt.vs.ctrl", ref = 2), 
 + 	type = "resp", adjust = "none")
- contrast rate.ratio        SE df   z.ratio p.value
- 1 - 2         1.575 0.3184189 NA 2.2468891  0.0246
- 3 - 2         1.175 0.2527659 NA 0.7496662  0.4535
+ contrast rate.ratio        SE df z.ratio p.value
+ 1 - 2         1.575 0.3184189 NA   2.247  0.0246
+ 3 - 2         1.175 0.2527659 NA   0.750  0.4535
 
 Results are averaged over the levels of: treatment 
-Tests are performed on the linear-predictor scale 
+Tests are performed on the log scale 
 > 
 > 
 > # weighting
@@ -548,4 +558,4 @@ Confidence level used: 0.95
 > 
 > proc.time()
    user  system elapsed 
-   1.01    0.20    2.76 
+   1.04    0.29    2.92 
