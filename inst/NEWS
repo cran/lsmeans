@@ -1,5 +1,18 @@
 Changelog for 'lsmeans' package
 
+2.23-5
+    More graceful handling of mu.hat <= 0 in regrid(., "log")
+    Added 'predict.type' argument to 'regrid'
+    Bug fixes related to the case where all estimates are NA
+    Addition of 'reversed' argument to 'cld'
+    Bug fixes for na.action handling. Results may now differ somewhat
+        from past versions, especially if you have covariates
+    Fixed bug in 'lstrends' when there is a response transformation
+    Fixed new bug that popped up when tbl_df objects are used
+    Under-the-radar support for Satterthwaite method from lmerTest.
+        To try it: `lsm.options(disable.satterth = FALSE)`
+
+
 2.23
     Added xtable support (actually uses xtableList)
     Corrected bugs in rbind.ref.grid that caused error when rank-deficient,

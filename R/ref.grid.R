@@ -8,7 +8,11 @@
 #     FALSE - same as function(x) sort(unique(x))
 
 ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs, 
-                     options = get.lsm.option("ref.grid"), data, type, ...) {
+                     options = get.lsm.option("ref.grid"), data, type, 
+                     transform = c("none", "response", "log"), ...) 
+{
+    transform = match.arg(transform)
+    
     # recover the data
     if (missing(data)) {
         data = try(recover.data (object, data = NULL, ...))
@@ -66,7 +70,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     cr = function(x, nm) {
         if (is.function(cov.reduce))
             cov.reduce(x)
-        else if (!is.null(cov.reduce[[nm]]))
+        else if (hasName(cov.reduce, nm))
             cov.reduce[[nm]](x)
         else
             mean(x)
@@ -93,7 +97,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     
         # Now go thru and find reference levels...
         # mentioned in 'at' list but not coerced
-        if (!(nm %in% coerced) && !missing(at) && !is.null(at[[nm]]))
+        if (!(nm %in% coerced) && !missing(at) && (hasName(at, nm)))
             ref.levels[[nm]] = at[[nm]]
         # factors not in 'at'
         else if (is.factor(x))
@@ -231,7 +235,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     }
 
     ### --- Determine weights for each grid point --- (added ver.2.11), updated ver.2.14 to include weights
-    if (is.null(data[["(weights)"]]))
+    if (!hasName(data, "(weights)"))
         data[["(weights)"]] = 1
     nms = union(names(xlev), coerced) # only factors, no covariates or mult.resp
     # originally, I used 'plyr::count', but there are probs when there is a 'freq' variable
@@ -285,6 +289,8 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
         result@misc$postGridHook = NULL
         result = hook(result)
     }
+    if(transform != "none")
+        result = regrid(result, transform = transform)
     
     .save.ref.grid(result)
     result
@@ -363,7 +369,7 @@ str.ref.grid <- function(object, ...) {
     cat(paste("'", class(object)[1], "' object with variables:\n", sep=""))
     for (nm in union(object@roles$predictors, union(object@roles$multresp, object@roles$responses))) {
         cat(paste("    ", nm, " = ", sep = ""))
-        if (nm %in% names(object@matlevs)) {
+        if (hasName(object@matlevs, nm)) {
             if (nm %in% object@roles$responses)
                 cat("multivariate response with means: ")
             else
@@ -466,7 +472,7 @@ lsm.options = function(...) {
 # equivalent of getOption()
 get.lsm.option = function(x, default = defaults.lsm[[x]]) {
     opts = getOption("lsmeans", list())
-    if(is.null(default) || x %in% names(opts))
+    if(is.null(default) || hasName(opts, x))
         opts[[x]]
     else 
         default
@@ -475,6 +481,7 @@ get.lsm.option = function(x, default = defaults.lsm[[x]]) {
 ### Exported defaults for certain options
 defaults.lsm = list(
     estble.tol = 1e-8,        # tolerance for estimability checks
+    disable.satterth = TRUE,  # for now, keep the old K-R method as default
     disable.pbkrtest = FALSE, # whether to bypass pbkrtest routines for lmerMod
     pbkrtest.limit = 3000,    # limit on N for enabling adj V
     save.ref.grid = TRUE      # save new ref.grid in .Last.ref.grid
@@ -482,7 +489,7 @@ defaults.lsm = list(
 
 # Utility that returns TRUE if getOption("lsmeans")[[opt]] is TRUE
 .lsm.is.true = function(opt) {
-    x = get.lsm.option(opt, FALSE)
+    x = get.lsm.option(opt)
     if (is.logical(x))  x
     else FALSE
 }
@@ -492,7 +499,9 @@ defaults.lsm = list(
 ### Returned ref.grid object has linfct = I and bhat = estimates
 ### Primary reason to do this is with transform = TRUE, then can 
 ### work with linear functions of the transformed predictions
-regrid = function(object, transform = c("response", "log", "none"), inv.log.lbl = "response") {
+regrid = function(object, transform = c("response", "log", "none"), 
+    inv.log.lbl = "response", predict.type) 
+{
     if (is.logical(transform))   # for backward-compatibility
         transform = ifelse(transform, "response", "none")
     else
@@ -525,17 +534,24 @@ regrid = function(object, transform = c("response", "log", "none"), inv.log.lbl 
     if(transform %in% c("response", "log") && !is.null(object@misc$tran)) {
         link = attr(est, "link")
         D = .diag(link$mu.eta(object@bhat[estble]))
-        object@bhat = sapply(object@bhat, function(x) 
-            ifelse(link$valideta(x), link$linkinv(x), 0))
+        object@bhat = link$linkinv(object@bhat)
         object@V = D %*% tcrossprod(object@V, D)
         inm = object@misc$inv.lbl
         if (!is.null(inm))
             object@misc$estName = inm
         object@misc$tran = object@misc$tran.mult = object@misc$inv.lbl = NULL
     }
-    if (transform == "log") {
-        D = .diag(1/object@bhat)
-        object@V = D %*% tcrossprod(object@V, D)
+    if (transform == "log") { # from prev block, we now have stuff on response scale
+        incl = which(object@bhat > 0)
+        if (length(incl) < length(object@bhat)) {
+            message("Non-positive response predictions are flagged as non-estimable")
+            tmp = seq_along(object@bhat)
+            excl = tmp[-incl]
+            object@bhat[excl] = NA
+            object@nbasis = sapply(excl, function(ii) 0 + (tmp == ii))
+        }
+        D = .diag(1/object@bhat[incl])
+        object@V = D %*% tcrossprod(object@V[incl, incl, drop = FALSE], D)
         object@bhat = log(object@bhat)
         object@misc$tran = "log"
         object@misc$inv.lbl = inv.log.lbl
@@ -543,6 +559,8 @@ regrid = function(object, transform = c("response", "log", "none"), inv.log.lbl 
     # Nix out things that are no longer needed or valid
     object@grid$.offset. = object@misc$offset.mult =
         object@misc$estHook = object@misc$vcovHook = NULL
+    if(!missing(predict.type))
+        object = update(object, predict.type = predict.type)
     object
 }
 

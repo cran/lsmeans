@@ -56,7 +56,8 @@ Use these methods to summarize, print, plot, or examine objects of class \code{"
 
 \method{vcov}{ref.grid}(object, ...)
 
-regrid (object, transform = c("response", "log", "none"), inv.log.lbl = "response")
+regrid (object, transform = c("response", "log", "none"), 
+    inv.log.lbl = "response", predict.type)
 
 \method{as.mcmc}{ref.grid}(x, names = TRUE, ...)
 }
@@ -101,6 +102,7 @@ The object to be subsetted, printed, plotted, or converted.
   \item{int.adjust}{the multiplicity adjustment method for the plotted confidence intervals; if missing, it defaults to the object's internal \code{adjust} setting (see \code{\link{update}}). (Note: the \code{adjust} argument in \code{plot} sets the adjust method for the comparison arrows, not the confidence intervals.)}
   \item{transform}{Character value. If \code{"response"}, the inverse transformation is applied to the estimates in the grid; if \code{"log"}, the results are formulated as if the response had been \code{log}-transformed; if \code{"none"}, predictions thereof are on the same scale as in \code{object}, and any internal transformation information is preserved. For compatibility with past versions, \code{transform} may also be logical; \code{TRUE} is taken as \code{"response"}, and \code{FALSE} as \code{"none"}.}
   \item{inv.log.lbl}{Character value. This applies only when \code{transform = "log"}, and is used to label the predictions if subsequently summarized with \code{type = "response"}.}
+  \item{predict.type}{Character value. If provided, the returned object is first \code{\link{update}}d with the given type, e.g., \code{"response"}.}
   \item{names}{Logical scalar or vector specifying whether variable names are appended to levels in the column labels for the \code{as.mcmc} result -- e.g., column names of \code{treat A} and \code{treat B} versus  just \code{A} and \code{B}. When there is more than one variable involved, the elements of \code{names} are used cyclically.}
 \item{\dots, digits, quote, right, caption, label, align, display, auto, include.rownames, sanitize.message.function, xlab, ylab, layout}{For summaries, these are additional arguments passed to other methods including \code{\link{print.data.frame}}, 
 \code{\link{xtableList}}, \code{\link{print.xtableList}},
@@ -125,7 +127,7 @@ The \code{adjust} argument specifies a multiplicity adjustment for tests or conf
 \item{\code{"none"}}{Makes no adjustments to the \eqn{p} values.}
 } % end \describe {}
 
-For P-value adjustments only, the other Bonferroni-inequality-based adjustment methods in \code{\link{p.adjust}} are also available. If a \code{p.adjust.methods} method other than \code{"bonferroni"} or \code{"none"} is specified for confidence limits, the straight Bonferoni adjustment is used instead.
+For P-value adjustments only, the Bonferroni-inequality-based adjustment methods in \code{\link{p.adjust}} are also available (currently, these include \code{"holm"}, \code{"hochberg"}, \code{"hommel"}, \code{"bonferroni"}, \code{"BH"}, \code{"BY"}, \code{"fdr"}, and \code{"none"}). If a \code{p.adjust.methods} method other than \code{"bonferroni"} or \code{"none"} is specified for confidence limits, the straight Bonferoni adjustment is used instead.
 Also, if an adjustment method is not appropriate (e.g., using \code{"tukey"} with one-sided tests, or with results that are not pairwise comparisons), a more appropriate method (usually \code{"sidak"}) is substituted. 
 
 In some cases, confidence and \eqn{p}-value adjustments are only approximate -- especially when the degrees of freedom or standard errors vary greatly within the family of tests. The \code{"mvt"} method is always the correct one-step adjustment, but it can be very slow. One may use \code{\link{as.glht}} with methods in the \pkg{multcomp} package to obtain non-conservative multi-step adjustments to tests.
@@ -174,7 +176,7 @@ Russell V. Lenth
 %\note{}
 
 \seealso{
-Methods for the closely related \code{"lsmobj"} class can be found in \code{\link[lsmeans]{contrast}}, \code{\link[lsmeans]{cld}}, and \code{\link[lsmeans]{glht}}. Also, \code{\link{test}} and \code{\link{confint}} are essentially front-ends for \code{summary}, so additional examples may be found there.
+Methods for the closely related \code{"lsmobj"} class can be found in \code{\link[lsmeans]{contrast}}, \code{\link[lsmeans]{cld}}, and \code{\link[lsmeans]{glht}}. For more on Bonferroni-based P-value adjustments, see \code{\link{p.adjust}}. Also, \code{\link{test}} and \code{\link{confint}} are essentially front-ends for \code{summary}, so additional examples may be found there.
 }
 \examples{
 require(lsmeans)
