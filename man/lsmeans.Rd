@@ -21,7 +21,7 @@ and optionally comparisons or contrasts among them.
 
 \method{lsmeans}{character.ref.grid}(object, specs, by = NULL, 
     fac.reduce = function(coefs) apply(coefs, 2, mean), contr, 
-    options = getOption("lsmeans")$lsmeans, weights, ...)
+    options = getOption("lsmeans")$lsmeans, weights, trend, ...)
 ## (used when 'object' is a 'ref.grid' and 'specs' is 'character')
     
 \method{lsmeans}{list}(object, specs, ...)
@@ -30,7 +30,8 @@ and optionally comparisons or contrasts among them.
 \method{lsmeans}{formula}(object, specs, contr.list, trend, ...)
 ## (used when 'specs' is a 'formula')
 
-lstrends(model, specs, var, delta.var = 0.01 * rng, data, ...)
+lstrends(model, specs, var, delta.var = 0.01 * rng, data, 
+   transform = c("none", "response"), ...)
 
 lsmobj(bhat, V, levels, linfct, df = NA, post.beta = matrix(NA), ...)
 
@@ -71,10 +72,10 @@ Note: If weights were used in fitting the model, then weight totals are used in 
 If \code{weights} is used, \code{fac.reduce} is ignored. 
 }
 \item{trend}{
-Including this argument is an alternative way of calling \code{lstrends} with it as its \code{var} argument.
+Including this argument is an alternative way of calling \code{lstrends} with \code{trend} as its \code{var} argument and \code{object} as its \code{model}.
 }
 \item{model}{
-A supported model object.
+A supported model object (\emph{not} a \code{ref.grid}).
 }
 \item{var}{
 Character giving the name of a variable with respect to which a difference quotient of the linear predictors is computed. In order for this to be useful, \code{var} should be a numeric predictor that interacts with at least one factor in \code{specs}. Then instead of computing least-squares means, we compute and compare the slopes of the \code{var} trend over levels of the specified other predictor(s). As in least-squares means, marginal averages are computed when some variables in the reference grid are excluded for the specification.
@@ -85,11 +86,12 @@ The user may specify some monotone function of one variable, e.g., \code{var = "
 The value of \emph{h} to use in forming the difference quotient \emph{(f(x+h) - f(x))/h}. Changing it (especially changing its sign) may be necessary to avoid numerical problems such as logs of negative numbers. The default value is 1/100 of the range of \code{var} over the dataset.
 }
 \item{data}{As in \code{\link{ref.grid}}, you may use this argument to supply the dataset used in fitting the model, for situations where it is not possible to reconstruct the data. Otherwise, leave it missing.}
+\item{transform}{In \code{lstrends}, if \code{object} has a response transformation, then specifying \code{transform = "response"} will cause \code{lstrends} to calculate the trends after back-transforming to the response scale. This is done using the chain rule, and standard errors are estimated via the delta method. With \code{transform = "none"} (the default), the trends are calculated on the scale of the linear predictor, without back-transforming it. This argument works similarly to the \code{transform} arguent in \code{\link{ref.grid}} (but without a \code{"log"} option), in that the returned object is re-gridded to the new scale (see also \code{\link{regrid}}).}
 \item{bhat}{Numeric. Vector of regression coefficients.}
 \item{V}{Square matrix. Covariance matrix of \code{bhat}}
 \item{levels}{Named list or vector. Levels of factor(s) that define the estimates defined by \code{linfct}. If not a list, we assume one factor named \code{"level"}}
 \item{linfct}{Matrix. Linear functions of \code{bhat} for each combination of \code{levels}}
-\item{df}{Numeric or function with arguments \code{x,dfargs)}. If a number, that is used for the degrees of freedom. If a function, it should return the degrees of freedom for \code{sum(x*bhat)}; if additional parameters are needed, include them in \code{\dots} as \code{dfargs} (not abbreviated).}
+\item{df}{Numeric or function with arguments \code{(x,dfargs)}. If a number, that is used for the degrees of freedom. If a function, it should return the degrees of freedom for \code{sum(x*bhat)}; if additional parameters are needed, include them in \code{\dots} as \code{dfargs} (not abbreviated).}
 \item{post.beta}{Matrix whose columns comprise a sample from the posterior distribution of the regression coefficients (so that typically, the column averages will be \code{bhat}). A 1 x 1 matrix of \code{NA} indicates that such a sample is unavailable.}
 \item{\dots}{Additional arguments passed to other methods or to \code{\link{ref.grid}}. For example, \code{vcov.} may be used to override the default covariance estimate, and some models allow additional options. Some models require \code{data} to be given explicitly. See the help pages for \code{\link{ref.grid}} and \link{models}. In addition, if the model formula contains references to variables that are not predictors, you must provide a \code{params} argument with a list of their names; see the example below for \code{Oatsq.lm}.}
 }
@@ -114,7 +116,7 @@ When \code{specs} is a \code{character} vector or one-sided formula, an object o
 
 When \code{specs} is a \code{list} or a \code{formula} having a left-hand side, the eturn value is an \code{lsm.list} object, which is simply a \code{list} of \code{lsmobj} objects. Methods for \code{lsm.list} objects are the same as those for \code{lsmobj}, but they apply to only one member of the list, determined by its \code{which} argument.
 
-\bold{Side effect:} When \code{object} is a model, a reference grid is constructed and it is saved as \code{.Last.ref.grid} in the user's enironment (unless this is disabled via \samp{lsm.option(save.ref.grid = FALSE)}). This makes it possible to check what reference grid was used, or to use it as the \code{object} in future \code{lsmeans} calls (and bypass reconstructing it). Similarly, \code{lstrends} also saves its reference grid (but for predicting difference quotients) in the same variable.
+\bold{Side effect:} When \code{object} is a model, a reference grid is constructed and it is saved as \code{.Last.ref.grid} in the user's enironment (unless this is disabled via \samp{lsm.option(save.ref.grid = FALSE)}). This makes it possible to check what reference grid was used, or to use it as the \code{object} in future \code{lsmeans} calls (and bypass reconstructing it). Similarly, \code{lstrends} also saves its reference grid (but for predicting difference quotients) as \code{.Last.ref.grid}.
 }
 
 \note{If the model formula contains variables that are not predictors (e.g., degree of a polynomial, knots for a spline, etc.), you must add a \code{params} argument to the call}

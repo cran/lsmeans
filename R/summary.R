@@ -22,6 +22,7 @@
         return(result[-1, ])
     }
     misc = object@misc
+
     if (!is.null(hook <- misc$estHook)) {
         if (is.character(hook)) hook = get(hook)
         result = hook(object, do.se=do.se, tol=tol)
@@ -499,7 +500,7 @@ summary.ref.grid <- function(object, infer, level, adjust, by, type, df,
                                  "with a threshold of", delta))
         if(tail != 0) 
             mesg = c(mesg, paste("P values are ", ifelse(tail<0,"left-","right-"),"tailed", sep=""))
-        if (!is.null(link)) 
+        if (inv) 
             mesg = c(mesg, paste("Tests are performed on the", link$name, "scale"))
     }
     if (inv) {

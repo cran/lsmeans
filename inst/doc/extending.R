@@ -98,7 +98,7 @@ lsmeans(fake.lts, ~ B | A)
 
 
 ###################################################
-### code chunk number 14: extending.rnw:194-197
+### code chunk number 14: extending.rnw:175-178
 ###################################################
 form = ~ data$x + data[[5]]
 base::all.vars(form)
@@ -106,8 +106,104 @@ lsmeans::.all.vars(form)
 
 
 ###################################################
-### code chunk number 15: extending.rnw:204-205
+### code chunk number 15: extending.rnw:185-186
 ###################################################
 .get.offset(terms(~ speed + offset(.03*breaks)), head(warpbreaks))
+
+
+###################################################
+### code chunk number 16: extending.rnw:203-227 (eval = FALSE)
+###################################################
+## recover.data.rsm = function(object, data, mode = c("asis", "coded", "decoded"), ...) {
+##     mode = match.arg(mode)
+##     cod = codings(object)
+##     fcall = object$call
+##     if(is.null(data))
+##         data = lsmeans::recover.data(fcall, delete.response(terms(object)), object$na.action, ...)
+##     if (!is.null(cod) && (mode == "decoded")) {
+##         pred = cpred = attr(data, "predictors")
+##         trms = attr(data, "terms")
+##         data = decode.data(as.coded.data(data, formulas = cod))
+##         for (form in cod) {
+##             vn = all.vars(form)
+##             if (!is.na(idx <- grep(vn[1], pred))) {
+##                 pred[idx] = vn[2]
+##                 cpred = setdiff(cpred, vn[1])
+##             }
+##         }
+##         attr(data, "predictors") = pred
+##         new.trms = update(trms, reformulate(c("1", cpred)))   # excludes coded variables
+##         attr(new.trms, "orig") = trms       # save orig terms as an attribute
+##         attr(data, "terms") = new.trms
+##     }
+##     data
+## }
+
+
+###################################################
+### code chunk number 17: extending.rnw:239-263 (eval = FALSE)
+###################################################
+## lsm.basis.rsm = function(object, trms, xlev, grid, 
+##                          mode = c("asis", "coded", "decoded"), ...) {
+##     mode = match.arg(mode)
+##     cod = codings(object)
+##     if(!is.null(cod) && mode == "decoded") {
+##         grid = coded.data(grid, formulas = cod)
+##         trms = attr(trms, "orig")   # get back the original terms we saved
+##     }
+##     
+##     m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
+##     X = model.matrix(trms, m, contrasts.arg = object$contrasts)
+##     bhat = as.numeric(object$coefficients) 
+##     V = lsmeans::.my.vcov(object, ...)
+##     
+##     if (sum(is.na(bhat)) > 0)
+##         nbasis = estimability::nonest.basis(object$qr)
+##     else
+##         nbasis = estimability::all.estble
+##     dfargs = list(df = object$df.residual)
+##     dffun = function(k, dfargs) dfargs$df
+## 
+##     list(X = X, bhat = bhat, nbasis = nbasis, V = V, 
+##          dffun = dffun, dfargs = dfargs, misc = list())
+## }
+
+
+###################################################
+### code chunk number 18: extending.rnw:272-278 (eval = FALSE)
+###################################################
+## if (requireNamespace("lsmeans", quietly = TRUE)) {
+##     importFrom("lsmeans", "recover.data", "lsm.basis")
+##     importFrom("estimability", "all.estble", "nonest.basis")
+##     S3method(recover.data, rsm)
+##     S3method(lsm.basis, rsm)
+## }
+
+
+###################################################
+### code chunk number 19: extending.rnw:288-290
+###################################################
+library("rsm")
+example("rsm")   ### (output is not shown) ###
+
+
+###################################################
+### code chunk number 20: extending.rnw:293-295
+###################################################
+lsmeans(CR.rs2, ~ x1 * x2, mode = "coded", 
+        at = list(x1 = c(-1, 0, 1), x2 = c(-2, 2)))
+
+
+###################################################
+### code chunk number 21: extending.rnw:298-299
+###################################################
+codings(CR.rs1)
+
+
+###################################################
+### code chunk number 22: extending.rnw:302-304
+###################################################
+lsmeans(CR.rs2, ~ Time * Temp, mode = "decoded", 
+        at = list(Time = c(80, 85, 90), Temp = c(165, 185)))
 
 

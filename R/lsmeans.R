@@ -111,13 +111,29 @@ lsmeans.character = function(object, specs, ...) {
 }
 
 # Needed for model objects
-lsmeans.character.default = function(object, specs, ...)
-    lsmeans.default(object, specs, ...)
+lsmeans.character.default = function(object, specs, trend, ...) {
+    if (!missing(trend))
+        lstrends(object, specs, var = trend, ...)
+    else
+        lsmeans.default(object, specs, ...)
+}
 
 # Method for a ref.grid -- all methods will get us here eventually
 lsmeans.character.ref.grid = function(object, specs, by = NULL, 
          fac.reduce = function(coefs) apply(coefs, 2, mean), 
-         contr, options = getOption("lsmeans")$lsmeans, weights, ...) {
+         contr, options = getOption("lsmeans")$lsmeans, weights, trend, ...) {
+    
+    if (!missing(trend)) {
+        stop("Trend results require supplying the model object itself, not a reference grid")
+        # message("Re-fitting the model. Avoid this by calling lsmeans with the model object.")
+        # cl = match.call()
+        # cl[[1]] = as.name("lstrends")
+        # cl$model = object@model.info$call
+        # cl$var = trend
+        # cl$object = cl$trend = NULL
+        # return(eval(cl))
+    }
+    
     RG = object
     facs = union(specs, by)
     
@@ -377,6 +393,7 @@ contrast.ref.grid = function(object, method = "eff", interaction = FALSE,
     
     row.names(linfct) = NULL
     misc = object@misc
+    misc$initMesg = NULL # initial annotation likely will no longer apply
     misc$estName = "estimate"
     if (!is.null(et <- attr(cmat, "type")))
         misc$estType = et
@@ -402,13 +419,26 @@ contrast.ref.grid = function(object, method = "eff", interaction = FALSE,
     # zap the transformation info except in very special cases
     if (!is.null(misc$tran)) {
         misc$orig.tran = misc$tran
-        # anything other than (-1,0,1)?
-        non.comp = setdiff(zapsmall(unique(as.matrix(cmat))), c(-1,0,1)) 
-        if(length(non.comp) == 0 && (misc$tran %in% c("log", "logit"))) {
+# --- previous code        
+#         # anything other than (-1,0,1)?
+#         non.comp = setdiff(zapsmall(unique(as.matrix(cmat))), c(-1,0,1)) 
+#         if(length(non.comp) == 0 && (misc$tran %in% c("log", "logit"))) {
+#             misc$orig.inv.lbl = misc$inv.lbl
+#             misc$inv.lbl = ifelse(misc$tran == "logit", "odds.ratio", 
+#                                   paste(misc$inv.lbl,"ratio",sep="."))
+#             misc$tran = "log"
+#         }
+# Replacement 2016-10-19:
+        true.con = all(zapsmall(apply(cmat, 2, sum)) == 0) # each set of coefs sums to 0
+        if (true.con && misc$tran == "log") {
             misc$orig.inv.lbl = misc$inv.lbl
-            misc$inv.lbl = ifelse(misc$tran == "logit", "odds.ratio", 
-                                  paste(misc$inv.lbl,"ratio",sep="."))
+            misc$inv.lbl = paste(misc$inv.lbl,"ratio",sep=".")
             misc$tran = "log"
+        }
+        else if (true.con && misc$tran == "logit") {
+            misc$orig.inv.lbl = misc$inv.lbl
+            misc$inv.lbl = "odds.ratio"
+            misc$tran = "log.o.r."
         }
         else
             misc$tran = misc$tran.mult = NULL
@@ -551,91 +581,6 @@ pairs.ref.grid = function(x, reverse = FALSE, ...) {
 }
 
 
-
-### lstrends function
-lstrends = function(model, specs, var, delta.var=.01*rng, data, ...) {
-    estName = paste(var, "trend", sep=".") # Do now as I may replace var later
-
-    if (missing(data)) {
-        data = try(recover.data (model, data = NULL))
-        if (inherits(data, "try-error"))
-            stop("Possible remedy: Supply the data used in the 'data' argument")
-    }
-    else # attach needed attributes to given data
-        data = recover.data(model, data = data)
-    
-    x = data[[var]]
-    fcn = NULL   # differential
-    if (is.null(x)) {
-        fcn = var
-        var = .all.vars(as.formula(paste("~",var)))
-        if (length(var) > 1)
-            stop("Can only support a function of one variable")
-        else {
-            x = data[[var]]
-            if (is.null(x)) stop("Variable '", var, "' is not in the dataset")            
-        }
-    }
-    rng = diff(range(x))
-    if (delta.var == 0)  stop("Provide a nonzero value of 'delta.var'")
-    
-    RG = ref.grid(model, data = data, ...)
-    grid = RG@grid
-    if (!is.null(mr <- RG@roles$multresp)) {
-        # use the grid value only for the 1st mult resp (no dupes)
-        if (length(mr) > 0)
-            grid = grid[grid[[mr]] == RG@levels[[mr]][1], ]
-    }
-    grid[[var]] = grid[[var]] + delta.var
-    
-    basis = lsm.basis(model, attr(data, "terms"), RG@roles$xlev, grid, ...)
-    if (is.null(fcn))
-        newlf = (basis$X - RG@linfct) / delta.var
-    else {
-        y0 = with(RG@grid, eval(parse(text = fcn)))
-        yh = with(grid, eval(parse(text = fcn)))
-        diffl = (yh - y0)
-        if (any(diffl == 0)) warning("Some differentials are zero")
-        newlf = (basis$X - RG@linfct) / diffl
-    }
-    
-    # remove transformation from object
-    .zaptran = function(obj) {
-        if (is(obj, "ref.grid") && !is.null(obj@misc$tran)) {
-            obj@misc$orig.tran = obj@misc$tran
-            obj@misc$tran = obj@misc$tran.mult = NULL
-        }
-        obj
-    }
-    
-    RG@linfct = newlf
-    RG@roles$trend = var
-    
-    .save.ref.grid(.zaptran(RG))  # save in .Last.ref.grid, if enabled
-    
-    args = list(object=RG, specs=specs, ...)
-    args$at = args$cov.reduce = args$mult.levs = args$vcov. = NULL
-    result = do.call("lsmeans", args)
-    if (is.list(result)) {
-        names(result)[1] = "lstrends"
-        if (is(result[[1]], "ref.grid")) {
-            result[[1]]@misc$estName = estName
-            result[[1]]@misc$estType = "prediction"
-            result[[1]]@misc$methDesc = "trends"
-            for (i in seq_along(result))
-                result[[i]] = .zaptran(result[[i]])
-        }
-    }
-    else {
-        result@misc$estName = estName
-        result@misc$estType = "prediction"
-        result@misc$methDesc = "trends"
-        result = .zaptran(result)
-    }
-    
-    
-    result
-}
 
 
 # Check if model contains a term containing all elts of facs

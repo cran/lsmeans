@@ -71,6 +71,7 @@ lsm.basis.default = function(object, trms, xlev, grid, ...) {
 # For model objects, call this with the object's call and its terms component
 # Late addition: if data is non-null, use it in place of recovered data
 # Later addition: na.action arg req'd - vector of row indexes removed due to NAs
+#    na.action is ignored when data is non-NULL
 recover.data.call = function(object, trms, na.action, data = NULL, params = NULL, ...) {
     fcall = object # because I'm easily confused
     vars = setdiff(.all.vars(trms), params)
@@ -100,8 +101,10 @@ recover.data.call = function(object, trms, na.action, data = NULL, params = NULL
             tbl = tbl[-(na.action),  , drop=FALSE]
     }
     
-    else
+    else {
+        tbl = tbl[, vars, drop = FALSE] # consider only the variables actually needed
         tbl = tbl[complete.cases(tbl), , drop=FALSE]
+    }
     
     attr(tbl, "call") = object # the original call
     attr(tbl, "terms") = trms
@@ -174,7 +177,7 @@ recover.data.merMod = function(object, ...) {
                  attr(object@frame, "na.action"), ...)
 }
 
-lsm.basis.merMod = function(object, trms, xlev, grid, vcov., ...) {
+lsm.basis.merMod = function(object, trms, xlev, grid, vcov., mode = get.lsm.option("lmer.df"), ...) {
     if (missing(vcov.))
         V = as.matrix(vcov(object))
     else
@@ -182,18 +185,19 @@ lsm.basis.merMod = function(object, trms, xlev, grid, vcov., ...) {
     dfargs = misc = list()
     
     if (lme4::isLMM(object)) {
-        satdis = .lsm.is.true("disable.satterth")
-        if (!satdis) {
+        mode = match.arg(tolower(mode), c("satterthwaite", "kenward-roger", "asymptotic"))
+        
+        if (mode == "satterthwaite") {
             if (requireNamespace("lmerTest")) {
                 dfargs = list(object = object)
                 dffun = function(k, dfargs) lmerTest::calcSatterth(dfargs$object, k)$denom
             }
             else {
                 message("Install package 'lmerTest' to obtain Satterthwaite degrees of freedom")
-                dffun = function(k, dfargs) NA
+                mode = "asymptotic"
             }
         }
-        else {
+        else if (mode == "kenward-roger") {
             pbdis = .lsm.is.true("disable.pbkrtest")
             Nlim = get.lsm.option("pbkrtest.limit")
             objN = lme4::getME(object, "N")
@@ -206,7 +210,7 @@ lsm.basis.merMod = function(object, trms, xlev, grid, vcov., ...) {
                 if(class(tst) != "try-error")
                     dffun = function(k, dfargs) pbkrtest::Lb_ddf (k, dfargs$unadjV, dfargs$adjV)
                 else {
-                    dffun = function(k, dfargs) NA
+                    mode = "asymptotic"
                     warning("To obtain d.f., install 'pbkrtest' version 0.4-1 or later")
                 }
             }
@@ -219,9 +223,13 @@ lsm.basis.merMod = function(object, trms, xlev, grid, vcov., ...) {
                             "Standard errors and tests may be more biased than if they were adjusted.\n",
                             "To enable adjustments, set lsm.options(pbkrtest.limit = ", objN, ") or larger,\n",
                             "but be warned that this may result in large computation time and memory use.")
-                dffun = function(k, dfargs) NA
+                mode = "asymptotic"
             }
         }
+        if (mode == "asymptotic") {
+            dffun = function(k, dfargs) NA
+        }
+        misc$initMesg = paste("Degrees-of-freedom method:", mode)
     }
     else if (lme4::isGLMM(object)) {
         dffun = function(k, dfargs) NA
@@ -310,7 +318,7 @@ recover.data.lme = function(object, data, ...) {
         if (!is.null(object$na.action))
             data = data[-object$na.action, , drop = FALSE]
     }
-    recover.data(fcall, delete.response(terms(object)), object$na.action, data = data, ...)
+    recover.data(fcall, delete.response(terms(object)), numeric(0), data = data, ...)
 }
 
 lsm.basis.lme = function(object, trms, xlev, grid, sigmaAdjust = TRUE, ...) {
