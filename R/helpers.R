@@ -1,3 +1,24 @@
+##############################################################################
+#    Copyright (c) 2012-2016 Russell V. Lenth                                #
+#                                                                            #
+#    This file is part of the lsmeans package for R (*lsmeans*)              #
+#                                                                            #
+#    *lsmeans* is free software: you can redistribute it and/or modify       #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 2 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    *lsmeans* is distributed in the hope that it will be useful,            #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with R and *lsmeans*.  If not, see                                #
+#    <https://www.r-project.org/Licenses/> and/or                            #
+#    <http://www.gnu.org/licenses/>.                                         #
+##############################################################################
+
 ### Helper functions for lsmeans
 ### Here we have 'recover.data' and 'lsm.basis' methods
 ### For models that this package supports.
@@ -75,9 +96,11 @@ lsm.basis.default = function(object, trms, xlev, grid, ...) {
 recover.data.call = function(object, trms, na.action, data = NULL, params = NULL, ...) {
     fcall = object # because I'm easily confused
     vars = setdiff(.all.vars(trms), params)
-    if (length(vars) == 0)
-        return("Model must have at least one predictor")
     tbl = data
+    if (length(vars) == 0) {
+        tbl = data.frame(c(1,1))
+        vars = names(tbl) = 1
+    }
     if (is.null(tbl)) {
         m = match(c("formula", "data", "subset", "weights"), names(fcall), 0L)
         fcall = fcall[c(1L, m)]
@@ -179,7 +202,7 @@ recover.data.merMod = function(object, ...) {
 
 lsm.basis.merMod = function(object, trms, xlev, grid, vcov., mode = get.lsm.option("lmer.df"), ...) {
     if (missing(vcov.))
-        V = as.matrix(vcov(object))
+        V = as.matrix(vcov(object, correlation = FALSE))
     else
         V = as.matrix(.my.vcov(object, vcov.))
     dfargs = misc = list()
@@ -315,6 +338,8 @@ recover.data.lme = function(object, data, ...) {
         fcall$weights = nlme::varWeights(object$modelStruct)
     if(is.null(data)) { # lme objects actually have the data, so use it!
         data = object$data
+        if (!is.null(fcall$subset))
+            data = data[eval(fcall$subset, envir=), , drop = FALSE]
         if (!is.null(object$na.action))
             data = data[-object$na.action, , drop = FALSE]
     }
@@ -736,6 +761,7 @@ lsm.basis.gam = function(object, trms, xlev, grid, ...) {
     retain = gsub("\\\\", "", retain)
     for (i in seq_along(retain))
         vars = gsub(repl[i], retain[i], vars)
+    if(length(vars) == 0) vars = "1"   # no vars ---> intercept
     vars
 }
 
