@@ -168,7 +168,7 @@ lsmeans.character.ref.grid = function(object, specs, by = NULL,
     
     # Figure out the structure of the grid
     wgt = RG@grid[[".wgt."]]
-    if(all(zapsmall(wgt) == 0)) wgt = wgt + 1 ### repl all zero wgts with 1
+    if(!is.null(wgt) && all(zapsmall(wgt) == 0)) wgt = wgt + 1 ### repl all zero wgts with 1
     dims = sapply(RG@levels, length)
     row.idx = array(seq_len(nrow(RG@linfct)), dims)
     use.mars = match(facs, names(RG@levels)) # which margins to use
@@ -178,7 +178,7 @@ lsmeans.character.ref.grid = function(object, specs, by = NULL,
     if ((length(avgd.mars) > 0) && !missing(weights)) {
         if (is.character(weights)) {
             if (is.null(wgt))
-                message("Weighting information not available -- deferring to fac.reduce")
+                warning("'weights' requested but no weighting information is available")
             else {
                 wopts = c("equal","proportional","outer","cells","show.levels","invalid")
                 weights = switch(wopts[pmatch(weights, wopts, 5)],
@@ -280,17 +280,21 @@ lsmeans.character.ref.grid = function(object, specs, by = NULL,
         result = do.call("update.ref.grid", options)
     }
     
-    if (missing(contr))
-        result
+    # if (missing(contr))
+    #     result
     
-    else { # return a list with lsmeans and contrasts
+    if(!missing(contr)) { # return a list with lsmeans and contrasts
         if (is.character(contr) && contr == "cld") {
         # TO DO: provide for passing dots to cld                
             return(cld(result, by = by))
         }
         ctrs = contrast(result, method = contr, by = by, ...)
-        .cls.list("lsm.list", lsmeans = result, contrasts = ctrs)
+        result = .cls.list("lsm.list", lsmeans = result, contrasts = ctrs)
+        if(!is.null(lbl <- object@misc$methDesc))
+            names(result)[1] = lbl
     }
+    
+    result
 }
 
 
@@ -315,6 +319,9 @@ contrast.ref.grid = function(object, method = "eff", interaction = FALSE,
         by = object@misc$by.vars
     if(length(by) == 0) # character(0) --> NULL
         by = NULL
+    
+    orig.grid = object@grid
+    orig.grid[[".wgt."]] = orig.grid[[".offset."]] = NULL
 
     if (is.logical(interaction) && interaction)
         interaction = method
@@ -331,12 +338,19 @@ contrast.ref.grid = function(object, method = "eff", interaction = FALSE,
             k = k - length(by)
         }
         interaction = rep(interaction, k)[1:k]
+        tcm = NULL
         for (i in k:1) {
             nm = paste(vars[i], interaction[i], sep = "_")
             object = contrast.ref.grid(object, interaction[i], by = vars[-i], name = nm)
+            if(is.null(tcm))
+                tcm = object@misc$con.coef
+            else
+                tcm = object@misc$con.coef %*% tcm
             vars[i] = nm
         }
         object = update(object, by = by, adjust = adjust, ...)
+        object@misc$orig.grid = orig.grid
+        object@misc$con.coef = tcm
         if(!is.null(options)) {
             options$object = object
             object = do.call(update.ref.grid, options)
@@ -377,6 +391,7 @@ contrast.ref.grid = function(object, method = "eff", interaction = FALSE,
     
     # Get the contrasts; this should be a data.frame
     cmat = method(levs, ...)
+    tcmat = t(cmat)
     if (!is.data.frame(cmat))
         stop("Contrast function must provide a data.frame")
     else if(ncol(cmat) == 0)
@@ -386,10 +401,11 @@ contrast.ref.grid = function(object, method = "eff", interaction = FALSE,
         stop("Nonconforming number of contrast coefficients")
     
     if (is.null(by)) {
-        linfct = t(cmat) %*% object@linfct
+        linfct = tcmat %*% object@linfct
         grid = data.frame(.contrast.=names(cmat))
         if (hasName(object@grid, ".offset."))
             grid[[".offset."]] = t(cmat) %*% object@grid[[".offset."]]
+        by.rows = list(seq_along(object@linfct[ , 1]))
     }
     
     # NOTE: The kronecker thing here is nice and efficient but depends
@@ -397,9 +413,9 @@ contrast.ref.grid = function(object, method = "eff", interaction = FALSE,
     # If you ever want to expand to irregular grids, this block will
     # have to change, but everything else is probably OK.
     else {
-        tcmat = kronecker(.diag(rep(1,length(by.rows))), t(cmat))
-        linfct = tcmat %*% object@linfct[unlist(by.rows), ]
-        tmp = expand.grid(con= names(cmat), by = seq_len(length(by.rows)))###unique(by.id))
+        tcmat = kronecker(.diag(rep(1,length(by.rows))), tcmat)
+        linfct = tcmat %*% object@linfct[unlist(by.rows), , drop = FALSE]
+        tmp = expand.grid(con = names(cmat), by = seq_len(length(by.rows)))###unique(by.id))
         grid = data.frame(.contrast. = tmp$con)
         n.each = ncol(cmat)
         row.1st = sapply(by.rows, function(x) x[1])
@@ -445,6 +461,12 @@ contrast.ref.grid = function(object, method = "eff", interaction = FALSE,
     misc$adjust = adjust
     misc$infer = c(FALSE, TRUE)
     misc$by.vars = by
+    # save contrast coefs
+    by.cols = seq_len(ncol(tcmat))
+    if(!is.null(by.rows))
+        by.cols[unlist(by.rows)] = by.cols # gives us inverse of by.rows order
+    misc$orig.grid = orig.grid  # save original grid
+    misc$con.coef = tcmat[ , by.cols, drop = FALSE] # save contrast coefs
     # zap the transformation info except in very special cases
     if (!is.null(misc$tran)) {
         misc$orig.tran = misc$tran
@@ -608,6 +630,19 @@ pairs.ref.grid = function(x, reverse = FALSE, ...) {
     else
         contrast(object, method = "pairwise", ...)
 }
+
+
+# coef method - returns contrast coefficients, or identity matrix if no contrasts
+coef.ref.grid = function(object, ...) {
+    if (is.null(cc <- object@misc$con.coef)) {
+        message("No contrast coefficients are available")
+        return (NULL)
+    }
+    cc = as.data.frame(t(cc))
+    names(cc) = paste("c", seq_len(ncol(cc)), sep = ".")
+    cbind(object@misc$orig.grid, cc)
+}
+    
 
 
 

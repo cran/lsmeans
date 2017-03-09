@@ -10,6 +10,8 @@
 \alias{confint.ref.grid}
 \alias{pairs}
 \alias{pairs.ref.grid}
+\alias{coef}
+\alias{coef.ref.grid}
 
 
 
@@ -31,6 +33,8 @@ These methods provide for analyses of \code{ref.grid} objects, or follow-up anal
 \method{confint}{ref.grid}(object, parm, level = 0.95, ...)
 
 \method{pairs}{ref.grid}(x, reverse = FALSE, ...)
+
+\method{coef}{ref.grid}(object, ...)
 }
 %- maybe also 'usage' for other objects documented here.
 \arguments{
@@ -82,6 +86,8 @@ When using \code{test} to do a joint test of L beta = null, an error is thrown i
 The ``grid'' for the returned value is simply the set of variables that identify the results. For example, \code{contrast}'s return value is a reference grid for one factor named \code{contrast}.
 
 \code{confint} and \code{test} (when \code{Joint==FALSE}) return an object of class \code{summary.ref.grid}. When \code{JOINT==TRUE}, \code{test} returns a \code{"summary.ref.grid"} object (extends \code{"data.frame"})  with the test statistic, degrees of freedom, and \emph{P} value for each \code{by} group.
+
+When \code{object} is the result of a call to \code{contrast} or \code{pairs}, the \code{coef} method returns a\code{data.frame}. The initial columns are the factor combinations that were contrasted (i.e. the grid for the \code{object} originally specified in the call to \code{contrast}), and the remaining columns (named \code{c.1}, \code{c.2}, \ldots) contain the contrast coefficients that were applied to the corresponding predictions. If \code{object} was not produced via \code{contrast}, \code{NULL} is returned, along with a message. 
 }
 %\references{}
 \author{
@@ -119,7 +125,10 @@ contrast(warp.lsm,
 contrast(warp.lsm, "consec", by = NULL)
 
 # Interaction contrasts (comparisons of linear and quadratic contrasts)
-contrast(warp.lsm, interaction = c("poly", "consec"), by = NULL)
+(int.con <- contrast(warp.lsm, interaction = c("poly", "consec"), by = NULL))
+
+# See the contrast coefficients used by the previous call
+coef(int.con)
     
 }
 % Add one or more standard keywords, see file 'KEYWORDS' in the
