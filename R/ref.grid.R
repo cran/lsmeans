@@ -30,7 +30,7 @@
 
 ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs, 
                      options = get.lsm.option("ref.grid"), data, df, type, 
-                     transform = c("none", "response", "log"), ...) 
+                     transform = c("none", "response", "mu", "unlink", "log"), ...) 
 {
     transform = match.arg(transform)
     if (!missing(df)) {
@@ -173,8 +173,8 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     # if not, we probably get an error or something that isn't a formula
     # and it is silently ignored
     lhs = try(eval(attr(data, "call")[[2]][-3]), silent = TRUE)
-    if (is.null(misc$tran) && (inherits(lhs, "formula"))) { # No link fcn, but response may be transformed
-        tran = setdiff(.all.vars(lhs, functions = TRUE), c(.all.vars(lhs), "~", "cbind"))
+    if (inherits(lhs, "formula")) { # response may be transformed
+        tran = setdiff(.all.vars(lhs, functions = TRUE), c(.all.vars(lhs), "~", "cbind", "+", "-", "*", "/", "^", "%%", "%/%"))
         if(length(tran) > 0) {
             tran = paste(tran, collapse = ".")  
             # length > 1: Almost certainly unsupported, but facilitates a more informative error message
@@ -189,7 +189,10 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
             }
             if (tran == "linkfun")
                 tran = as.list(environment(trms))
-            misc$tran = tran
+            if(is.null(misc$tran))
+                misc$tran = tran
+            else
+                misc$tran2 = tran
             misc$inv.lbl = "response"
         }
     }
@@ -397,8 +400,14 @@ str.ref.grid <- function(object, ...) {
         if (is.null(x)) cat("(predicted by other variables)")
         else cat(paste(format(x, digits = 5, justify = "none"), collapse=", "))
     }
-    #cat("responses: ")
-    #showlevs(object@roles$responses)
+    showtran = function(tran, label) { # internal convenience fcn
+        if (is.list(tran)) 
+            tran = ifelse(is.null(tran$name), "custom", tran$name)
+        if (!is.null(mul <- object@misc$tran.mult))
+            tran = paste0(mul, "*", tran)
+        cat(paste(label, dQuote(tran), "\n"))
+        
+    }
     levs = object@levels
     cat(paste("'", class(object)[1], "' object with variables:\n", sep=""))
     for (nm in union(object@roles$predictors, union(object@roles$multresp, object@roles$responses))) {
@@ -424,11 +433,9 @@ str.ref.grid <- function(object, ...) {
         cat("\n")
     }
     if(!is.null(tran <- object@misc$tran)) {
-        if (is.list(tran)) 
-            tran = ifelse(is.null(tran$name), "custom - see slot(, \"misc\")$tran", tran$name)
-        if (!is.null(mul <- object@misc$tran.mult))
-            tran = paste0(mul, "*", tran)
-        cat(paste("Transformation:", dQuote(tran), "\n"))
+        showtran(tran, "Transformation:")
+        if (!is.null(tran2 <- object@misc$tran2))
+            showtran(tran2, "Additional response transformation:")
     }
 }
 
@@ -461,7 +468,7 @@ update.ref.grid = function(object, ..., silent = FALSE) {
     args = list(...)
     valid.misc = c("adjust","alpha","avgd.over","by.vars","delta","df",
         "initMesg","estName","estType","famSize","infer","inv.lbl",
-        "level","methdesc","null","predict.type","pri.vars","side","tran","tran.mult")
+        "level","methdesc","null","predict.type","pri.vars","side","tran","tran.mult","tran2")
     valid.slots = slotNames(object)
     valid.choices = union(valid.misc, valid.slots)
     misc = object@misc
@@ -536,13 +543,25 @@ defaults.lsm = list(
 ### Returned ref.grid object has linfct = I and bhat = estimates
 ### Primary reason to do this is with transform = TRUE, then can 
 ### work with linear functions of the transformed predictions
-regrid = function(object, transform = c("response", "log", "none"), 
+regrid = function(object, transform = c("response", "mu", "unlink", "log", "none"), 
     inv.log.lbl = "response", predict.type) 
 {
     if (is.logical(transform))   # for backward-compatibility
         transform = ifelse(transform, "response", "none")
     else
         transform = match.arg(transform)
+    
+    # if we have two transformations to undo, do the first one recursively
+    if ((transform == "response") && (!is.null(object@misc$tran2)))
+        object = regrid(object, transform = "mu")
+    
+    # Save post.beta stuff
+    PB = object@post.beta
+    NC = attr(PB, "n.chains")
+    
+    if (!is.na(PB[1])) # fix up post.beta BEFORE we overwrite parameters
+        PB = PB %*% t(object@linfct)
+
     est = .est.se.df(object, do.se = TRUE) ###FALSE)
     estble = !(is.na(est[[1]]))
     object@V = vcov(object)[estble, estble, drop=FALSE]
@@ -568,15 +587,22 @@ regrid = function(object, transform = c("response", "log", "none"),
         }
     }
     
-    if(transform %in% c("response", "log") && !is.null(object@misc$tran)) {
+    if(transform %in% c("response", "mu", "unlink", "log") && !is.null(object@misc$tran)) {
         link = attr(est, "link")
         D = .diag(link$mu.eta(object@bhat[estble]))
         object@bhat = link$linkinv(object@bhat)
         object@V = D %*% tcrossprod(object@V, D)
+        if (!is.na(PB[1]))
+            PB = matrix(link$linkinv(PB), ncol = ncol(PB))
         inm = object@misc$inv.lbl
         if (!is.null(inm))
             object@misc$estName = inm
-        object@misc$tran = object@misc$tran.mult = object@misc$inv.lbl = NULL
+        if((transform %in% c("mu", "unlink")) && !is.null(object@misc$tran2)) {
+            object@misc$tran = object@misc$tran2
+            object@misc$tran2 = object@misc$tran.mult = object@misc$inv.lbl = NULL
+        }
+        else
+            object@misc$tran = object@misc$tran.mult = object@misc$inv.lbl = NULL
     }
     if (transform == "log") { # from prev block, we now have stuff on response scale
         incl = which(object@bhat > 0)
@@ -590,9 +616,20 @@ regrid = function(object, transform = c("response", "log", "none"),
         D = .diag(1/object@bhat[incl])
         object@V = D %*% tcrossprod(object@V[incl, incl, drop = FALSE], D)
         object@bhat = log(object@bhat)
+        if (!is.na(PB[1])) {
+            PB[PB <= 0] = NA
+            PB = log(PB)
+            PB[1] = ifelse(is.na(PB[1]), 0, PB[1]) # make sure 1st elt isn't NA
+        }
         object@misc$tran = "log"
         object@misc$inv.lbl = inv.log.lbl
     }
+    
+    if(!is.na(PB[1])) {
+        attr(PB, "n.chains") = NC
+        object@post.beta = PB
+    }
+    
     # Nix out things that are no longer needed or valid
     object@grid$.offset. = object@misc$offset.mult =
         object@misc$estHook = object@misc$vcovHook = NULL

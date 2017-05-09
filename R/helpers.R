@@ -104,9 +104,25 @@ recover.data.call = function(object, trms, na.action, data = NULL, params = NULL
     if (is.null(tbl)) {
         m = match(c("formula", "data", "subset", "weights"), names(fcall), 0L)
         fcall = fcall[c(1L, m)]
+        
+        # check to see if there are any function calls to worry about
+        # [e.g., subset = sample(1:n, 50) will give us a different subset than model used]
+        mm = match(c("data", "subset"), names(fcall), 0L)
+        if(any(mm > 0)) {
+            fcns = unlist(lapply(fcall[mm], 
+                        function(x) setdiff(all.names(x), c("::",":::","[[","]]",all.vars(x)))))
+            if(max(nchar(c("", fcns))) > 1)
+                warning("Function call in data or subset: ref.grid/lsmeans results may be inconsistent",
+                        call. = FALSE)
+        }
+        
         fcall$drop.unused.levels = TRUE
         fcall[[1L]] = as.name("model.frame")
         fcall$xlev = NULL # we'll ignore xlev
+        
+        if(!is.numeric(na.action))   ### In case na.action is not a vector of indices
+            na.action = NULL
+        
         # If we have an explicit list of cases to exclude, let everything through now
         if (!is.null(na.action))
             fcall$na.action = na.pass
@@ -395,7 +411,7 @@ lsm.basis.gls = function(object, trms, xlev, grid, ...) {
 recover.data.polr = recover.data.lm
 
 lsm.basis.polr = function(object, trms, xlev, grid, 
-                          mode = c("latent", "linear.predictor", "cum.prob", "prob", "mean.class"), 
+                          mode = c("latent", "linear.predictor", "cum.prob", "exc.prob", "prob", "mean.class"), 
                           rescale = c(0,1), ...) {
     mode = match.arg(mode)
     contrasts = object$contrasts
@@ -727,6 +743,8 @@ lsm.basis.gam = function(object, trms, xlev, grid, ...) {
 # Returns a modified misc
 .std.link.labels = function(fam, misc) {
     if (is.null(fam))
+        return(misc)
+    if (fam$link == "identity")
         return(misc)
     misc$tran = fam$link
     misc$inv.lbl = "response"

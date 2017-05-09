@@ -15,6 +15,9 @@
 \alias{rbind.ref.grid}
 \alias{as.mcmc}
 \alias{as.mcmc.ref.grid}
+\alias{as.mcmc.list}
+\alias{as.mcmc.list.ref.grid}
+\alias{as.stanfit}
 \alias{[.ref.grid}
 \alias{xtable.ref.grid}
 \alias{xtable.summary.ref.grid}
@@ -58,10 +61,13 @@ Use these methods to summarize, print, plot, or examine objects of class \code{"
 
 \method{vcov}{ref.grid}(object, ...)
 
-regrid (object, transform = c("response", "log", "none"), 
+regrid (object, transform = c("response", "mu", "unlink", "log", "none"), 
     inv.log.lbl = "response", predict.type)
 
-\method{as.mcmc}{ref.grid}(x, names = TRUE, ...)
+\method{as.mcmc}{ref.grid}(x, names = TRUE, sep.chains = TRUE, ...)
+\method{as.mcmc.list}{ref.grid}(x, names = TRUE, ...)
+
+as.stanfit(object, names = TRUE, ...)
 }
 
 \arguments{
@@ -81,7 +87,7 @@ Character value naming the method used to adjust \eqn{p} values or confidence li
 Character name(s) of variables to use for grouping. This affects the family of tests considered in adjusted \emph{P} values. The printed display of the summary is grouped by the \code{by} variables.
 }
   \item{type}{
-Type of prediction desired (except in \code{print.xtable}). This only has an effect if there is a known transformation or link function. \code{"response"} specifies that the inverse transformation be applied. Other valid values are \code{"link"}, \code{"lp"}, and \code{"linear"}; these are equivalent, and request that results be shown for the linear predictor. The default is \code{"link"}, unless the \code{"predict.type"} option is in force; see \code{\link{lsm.options}}.
+Type of prediction desired (except in \code{print.xtable}). This only has an effect if there is a known transformation or link function. \code{"response"} specifies that the inverse transformation be applied. \code{"mu"} (or equivalently, \code{"unlink"} is usually the same as \code{"response"}, but in the case where the model has both a link function and a response transformation, only the link part is back-transformed. Other valid values are \code{"link"}, \code{"lp"}, and \code{"linear"}; these are equivalent, and request that results be shown for the linear predictor, with no back-transformation. The default is \code{"link"}, unless the \code{"predict.type"} option is in force; see \code{\link{lsm.options}}.
 
 Note that \code{type} is also an argument for the \code{print.xtable} method; it is passed to \code{\link[xtable]{print.xtableList}} in the \pkg{xtable} package.
 }
@@ -102,10 +108,11 @@ The object to be subsetted, printed, plotted, or converted.
   \item{comparisons}{If \code{TRUE}, \dQuote{comparison arrows} are added to the plot, in such a way that the degree to which arrows overlap reflects as much as possible the significance of the comparison of the two estimates.}
   \item{alpha}{The \code{alpha} argument to use in constructing comparison arrows.}
   \item{int.adjust}{the multiplicity adjustment method for the plotted confidence intervals; if missing, it defaults to the object's internal \code{adjust} setting (see \code{\link{update}}). (Note: the \code{adjust} argument in \code{plot} sets the adjust method for the comparison arrows, not the confidence intervals.)}
-  \item{transform}{Character value. If \code{"response"}, the inverse transformation is applied to the estimates in the grid; if \code{"log"}, the results are formulated as if the response had been \code{log}-transformed; if \code{"none"}, predictions thereof are on the same scale as in \code{object}, and any internal transformation information is preserved. For compatibility with past versions, \code{transform} may also be logical; \code{TRUE} is taken as \code{"response"}, and \code{FALSE} as \code{"none"}.}
+  \item{transform}{Character value. If \code{"response"} or \code{"mu"}, the inverse transformation is applied to the estimates in the grid (but if there is both a link function and a response transformation, \code{"mu"} back-transforms only the link part); if \code{"log"}, the results are formulated as if the response had been \code{log}-transformed; if \code{"none"}, predictions thereof are on the same scale as in \code{object}, and any internal transformation information is preserved. For compatibility with past versions, \code{transform} may also be logical; \code{TRUE} is taken as \code{"response"}, and \code{FALSE} as \code{"none"}.}
   \item{inv.log.lbl}{Character value. This applies only when \code{transform = "log"}, and is used to label the predictions if subsequently summarized with \code{type = "response"}.}
   \item{predict.type}{Character value. If provided, the returned object is first \code{\link{update}}d with the given type, e.g., \code{"response"}.}
-  \item{names}{Logical scalar or vector specifying whether variable names are appended to levels in the column labels for the \code{as.mcmc} result -- e.g., column names of \code{treat A} and \code{treat B} versus  just \code{A} and \code{B}. When there is more than one variable involved, the elements of \code{names} are used cyclically.}
+  \item{names}{Logical scalar or vector specifying whether variable names are appended to levels in the column labels for the \code{as.mcmc} or \code{as.mcmc.list} result -- e.g., column names of \code{treat A} and \code{treat B} versus  just \code{A} and \code{B}. When there is more than one variable involved, the elements of \code{names} are used cyclically.}
+\item{sep.chains}{Logical value. If \code{TRUE}, and there is more than one MCMC chain available, an \code{\link[coda]{mcmc.list}} object is returned by \code{as.mcmc}, with separate lsmeans posteriors in each chain.}
 \item{\dots, digits, quote, right, caption, label, align, display, auto, include.rownames, sanitize.message.function, xlab, ylab, layout}{For summaries, these are additional arguments passed to other methods including \code{\link{print.data.frame}}, 
 \code{\link{xtableList}}, \code{\link{print.xtableList}},
 \code{\link{update}}, or \code{\link{dotplot}} as appropriate. If not specified, appropriate defaults are used. For example, the default \code{layout} is one column of horizontal panels or one row of vertical panels.}
@@ -115,7 +122,7 @@ The object to be subsetted, printed, plotted, or converted.
 The \code{misc} slot in \code{object} contains default values for \code{by}, \code{infer}, \code{level}, \code{adjust}, \code{type}, \code{null}, \code{side}, and \code{delta}. These defaults vary depending on the code that created the object. The \code{\link{update}} method may be used to change these defaults. In addition, any options set using \samp{lsm.options(summary=...)} will trump those stored in the object's \code{misc} slot.
 
 \bold{Transformations and links:}
-With \code{type="response"}, the transformation assumed can be found in \samp{object@misc$tran}, and its label, for the summary is in \samp{object@misc$inv.lbl}. At this time, \code{tran} must be one of the named transformations valid for \code{\link{make.link}}. Any \eqn{t} or \eqn{z} tests are still performed on the scale of the linear predictor, not the inverse-transformed one. Similarly, confidence intervals are computed on the linear-predictor scale, then inverse-transformed.
+With \code{type="response"}, the transformation assumed can be found in \samp{object@misc$tran}, and its label, for the summary is in \samp{object@misc$inv.lbl}. Any \eqn{t} or \eqn{z} tests are still performed on the scale of the linear predictor, not the inverse-transformed one. Similarly, confidence intervals are computed on the linear-predictor scale, then inverse-transformed.
 
 \bold{Confidence-limit and P-value adjustments:}
 The \code{adjust} argument specifies a multiplicity adjustment for tests or confidence intervals. This adjustment always is applied \emph{separately} to each table or sub-table that you see in the printed output (see the details on \code{rbind} below for how to combine tables). The valid values of \code{adjust} are as follows:
@@ -129,7 +136,7 @@ The \code{adjust} argument specifies a multiplicity adjustment for tests or conf
 \item{\code{"none"}}{Makes no adjustments to the \eqn{p} values.}
 } % end \describe {}
 
-For P-value adjustments only, the Bonferroni-inequality-based adjustment methods in \code{\link{p.adjust}} are also available (currently, these include \code{"holm"}, \code{"hochberg"}, \code{"hommel"}, \code{"bonferroni"}, \code{"BH"}, \code{"BY"}, \code{"fdr"}, and \code{"none"}). If a \code{p.adjust.methods} method other than \code{"bonferroni"} or \code{"none"} is specified for confidence limits, the straight Bonferoni adjustment is used instead.
+For P-value adjustments only, the Bonferroni-inequality-based adjustment methods in \code{\link{p.adjust}} are also available (currently, these include \code{"holm"}, \code{"hochberg"}, \code{"hommel"}, \code{"bonferroni"}, \code{"BH"}, \code{"BY"}, \code{"fdr"}, and \code{"none"}). If a \code{p.adjust.methods} method other than \code{"bonferroni"} or \code{"none"} is specified for confidence limits, the straight Bonferroni adjustment is used instead.
 Also, if an adjustment method is not appropriate (e.g., using \code{"tukey"} with one-sided tests, or with results that are not pairwise comparisons), a more appropriate method (usually \code{"sidak"}) is substituted. 
 
 In some cases, confidence and \eqn{p}-value adjustments are only approximate -- especially when the degrees of freedom or standard errors vary greatly within the family of tests. The \code{"mvt"} method is always the correct one-step adjustment, but it can be very slow. One may use \code{\link{as.glht}} with methods in the \pkg{multcomp} package to obtain non-conservative multi-step adjustments to tests.
@@ -168,7 +175,8 @@ In plots with \code{comparisons = TRUE}, the resulting arrows are only approxima
 The \code{regrid} function reparameterizes an existing \code{ref.grid} so that its \code{linfct} slot is the identity matrix and its \code{bhat} slot consists of the estimates at the grid points. If \code{transform} is \code{TRUE}, the inverse transform is applied to the estimates. Outwardly, the \code{summary} after applying \code{regrid} is identical to what it was before (using \samp{type="response"} if \code{transform} is \code{TRUE}). But subsequent contrasts will be conducted on the transformed scale -- which is the reason this function exists. See the example below. In cases where the degrees of freedom depended on the linear function being estimated, the d.f. from the reference grid are saved, and a kind of \dQuote{containment} method is substituted in the returned object whereby the calculated d.f. for a new linear function will be the minimum d.f. among those having nonzero coefficients. This is kind of an \emph{ad hoc} method, and it can over-estimate the degrees of freedom in some cases.
 
 \bold{MCMC samplers:}
-When the object's \code{post.beta} slot is non-trivial, \code{as.mcmc} will return an \code{\link[coda]{mcmc}} object that can be summarized or plotted using methods in the \pkg{coda} package. Specifically, \code{post.beta} is transformed by post-multiplying by \code{t(linfct)}, creating a sample from the posterior distribution of LS means.
+When the object's \code{post.beta} slot is non-trivial, \code{as.mcmc} will return an \code{\link[coda]{mcmc}} or \code{\link[coda]{mcmc.list}} object that can be summarized or plotted using methods in the \pkg{coda} package. Alternatively, \code{as.stanfit} will return a \code{\link[rstan]{stanfit}} object that can be summarized or plotted using methods in the \pkg{rstan} package. You may use any of these functions regardless of what packages were originally used to implement the MCMC method.
+In these functions, \code{post.beta} is transformed by post-multiplying it by \code{t(linfct)}, creating a sample from the posterior distribution of LS means. In \code{as.mcmc}, if \code{sep.chains} is \code{TRUE} and there is in fact more than one chain, an \code{mcmc.list} is returned with each chain's results. The \code{as.mcmc.list} method is guaranteed to return an \code{mcmc.list}, even if it comprises just one chain. Note that \code{stanfit} objects are designed already for multiple chains.
 }
 
 \value{
