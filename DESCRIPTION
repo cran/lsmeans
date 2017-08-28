@@ -1,10 +1,11 @@
 Package: lsmeans
 Type: Package
 Title: Least-Squares Means
-Version: 2.26-3
-Date: 2017-05-09
+Version: 2.27-2
+Date: 2017-08-28
 Authors@R: c(person("Russell", "Lenth", role = c("aut", "cre", "cph"), 
-    email = "russell-lenth@uiowa.edu"))
+    email = "russell-lenth@uiowa.edu"),
+    person("Jonathon", "Love", role = "ctb"))
 Depends: estimability, methods, R (>= 3.2)
 Suggests: car, lattice, MCMCpack, mediation, multcompView, ordinal,
         pbkrtest (>= 0.4-1), CARBayes, coxme, gee, geepack, glmmADMB,
@@ -22,8 +23,9 @@ Description: Obtain least-squares means for many linear, generalized linear,
   means, and comparisons of slopes. Plots and compact letter displays.
 License: GPL-2 | GPL-3
 NeedsCompilation: no
-Packaged: 2017-05-08 21:55:43 UTC; rlenth
-Author: Russell Lenth [aut, cre, cph]
+Packaged: 2017-08-28 13:26:59 UTC; rlenth
+Author: Russell Lenth [aut, cre, cph],
+  Jonathon Love [ctb]
 Maintainer: Russell Lenth <russell-lenth@uiowa.edu>
 Repository: CRAN
-Date/Publication: 2017-05-09 07:18:09 UTC
+Date/Publication: 2017-08-28 14:41:31 UTC

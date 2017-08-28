@@ -31,10 +31,8 @@ lsmip.default = function(object, formula, type,
     if (!requireNamespace("lattice"))
         stop("This function requires the 'lattice' package be installed.")
     if (length(formula) < 3)
-        formula = reformulate(as.character(formula)[[2]], response = ".single.")
-        ###stop("'formula' must be two-sided, e.g. trace.factor ~ x.factor")
-        ### NEW: Allow lhs to be empty, so then we get a single trace
-    
+        formula = .reformulate(as.character(formula)[[2]], response = ".single.")
+
     # Glean the parts of ... to use in lsmeans call
     # arguments allowed to be passed
     lsa.allowed = c("at","trend","cov.reduce","fac.reduce")
@@ -51,7 +49,7 @@ lsmip.default = function(object, formula, type,
     
     allvars = setdiff(.all.vars(formula), ".single.")
     lsmopts$object = object
-    lsmopts$specs = reformulate(allvars)
+    lsmopts$specs = .reformulate(allvars)
     lsmo = do.call("lsmeans", lsmopts)
     if(missing(type)) {
         type = get.lsm.option("summary")$predict.type
@@ -82,7 +80,7 @@ lsmip.default = function(object, formula, type,
     
     # figure out 'x' and 'by' vars
     rhs = strsplit(as.character(formula[3]), "\\|")[[1]]
-    xvars = .all.vars(reformulate(rhs[[1]]))
+    xvars = .all.vars(stats::reformulate(rhs[[1]]))
     xv = do.call(paste, lsms[xvars])
     lsms$xvar = factor(xv, levels = unique(xv))
     lsms = lsms[order(lsms$xvar), ]
@@ -90,7 +88,7 @@ lsmip.default = function(object, formula, type,
     
     # see if we have any 'by' vars
     if (length(rhs) > 1) {
-        byvars = .all.vars(reformulate(rhs[[2]]))
+        byvars = .all.vars(stats::reformulate(rhs[[2]]))
         plotform = as.formula(paste("lsmean ~ xvar |", paste(byvars, collapse="*")))
     }
 

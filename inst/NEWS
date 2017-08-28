@@ -1,5 +1,17 @@
 Changelog for 'lsmeans' package
 
+
+2.27
+    Added warning and workaround if user specifies a vector for `type`
+    Added support for nested structure(s) in the fixed effects.
+    Modifications to summary.ref.grid to suppress output for empty cells
+        in nested structures and handle 'by' groups of varying sizes
+    Added support for variable names having spaces (contr by Jonathon Love)
+    Additional 'weights' option of "flat"
+    Non-estimable cases are now displayed as "nonEst" in the summary
+    Various bug fixes
+    
+
 2.26-3
     Moved code repository to https://github.com/rvlenth/lsmeans
     Added BugReports: URL to DESCRIPTION

@@ -161,10 +161,12 @@ recover.data.lm = function(object, ...) {
 }
 
 lsm.basis.lm = function(object, trms, xlev, grid, ...) {
-    m = model.frame(trms, grid, na.action = na.pass, xlev = xlev)
-    X = model.matrix(trms, m, contrasts.arg = object$contrasts)
     # coef() works right for lm but coef.aov tosses out NAs
-    bhat = as.numeric(object$coefficients) 
+    bhat = object$coefficients
+    nm = if(is.null(names(bhat))) row.names(bhat) else names(bhat)
+    m = suppressWarnings(model.frame(trms, grid, na.action = na.pass, xlev = xlev))
+    X = model.matrix(trms, m, contrasts.arg = object$contrasts)[, nm, drop = FALSE]
+    bhat = as.numeric(bhat) 
     # stretches it out if multivariate - see mlm method
     V = .my.vcov(object, ...)
     
@@ -758,6 +760,8 @@ lsm.basis.gam = function(object, trms, xlev, grid, ...) {
 ## Alternative to all.vars, but keeps vars like foo$x and foo[[1]] as-is
 ##   Passes ... to all.vars
 .all.vars = function(expr, retain = c("\\$", "\\[\\[", "\\]\\]"), ...) {
+    if (is.null(expr))
+        return(character(0))
     if (!inherits(expr, "formula")) {
         expr = try(eval(expr), silent = TRUE)
         if(inherits(expr, "try-error")) {

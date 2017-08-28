@@ -30,7 +30,8 @@
 
 ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs, 
                      options = get.lsm.option("ref.grid"), data, df, type, 
-                     transform = c("none", "response", "mu", "unlink", "log"), ...) 
+                     transform = c("none", "response", "mu", "unlink", "log"), 
+                     nesting, ...) 
 {
     transform = match.arg(transform)
     if (!missing(df)) {
@@ -233,7 +234,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     problems = if (!missing(at)) 
         intersect(c(multresp, coerced$factors), names(at)) 
     else character(0)
-    if (length(problems > 0)) {
+    if (length(problems) > 0) {
         incl.flags = rep(TRUE, nrow(grid))
         for (nm in problems) {
             if (is.numeric(ref.levels[[nm]])) {
@@ -278,6 +279,12 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     for (i in seq_along(key))
         wgt[tgt == key[i]] = sum(data[["(weights)"]][id==i])
     grid[[".wgt."]] = wgt
+    
+    model.info = list(call = attr(data,"call"), terms = trms, xlev = xlev)
+    # Detect any nesting structures
+    nst = .find_nests(grid, trms)
+    if (length(nst) > 0)
+        model.info$nesting = nst
 
     misc$ylevs = NULL # No longer needed
     misc$estName = "prediction"
@@ -293,7 +300,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
         post.beta = matrix(NA)
     
     result = new("ref.grid",
-         model.info = list(call = attr(data,"call"), terms = trms, xlev = xlev),
+         model.info = model.info,
          roles = list(predictors = attr(data, "predictors"), 
                       responses = attr(data, "responses"), 
                       multresp = multresp),
@@ -306,6 +313,9 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
         if (is.null(options)) options = list()
         options$predict.type = type
     }
+    
+    if (!missing(nesting))
+        result@model.info$nesting = nesting
 
     if(!is.null(options)) {
         options$object = result
@@ -366,14 +376,14 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     # What's left will be things like "factor(dose)", "interact(dose,treat)", etc
     cfac = setdiff(facs.m, facs.d)
     if(length(cfac) != 0) {
-        cvars = lapply(cfac, function(x) .all.vars(reformulate(x))) # Strip off the function calls
+        cvars = lapply(cfac, function(x) .all.vars(stats::reformulate(x))) # Strip off the function calls
         cfac = intersect(unique(unlist(cvars)), covs.d) # Exclude any variables that are already factors
     }
     
     # Do same with covariates
     ccov = setdiff(covs.m, covs.d)
     if(length(ccov) > 0) {
-        cvars = lapply(ccov, function(x) .all.vars(reformulate(x)))
+        cvars = lapply(ccov, function(x) .all.vars(stats::reformulate(x)))
         ccov = intersect(unique(unlist(cvars)), facs.d)
     }
     
@@ -432,6 +442,11 @@ str.ref.grid <- function(object, ...) {
             showlevs(levs[[nm]])
         cat("\n")
     }
+    if(!is.null(object@model.info$nesting)) {
+        cat("Nesting structure:  ")
+        cat(.fmt.nest(object@model.info$nesting))
+        cat("\n")
+    }
     if(!is.null(tran <- object@misc$tran)) {
         showtran(tran, "Transformation:")
         if (!is.null(tran2 <- object@misc$tran2))
@@ -468,7 +483,7 @@ update.ref.grid = function(object, ..., silent = FALSE) {
     args = list(...)
     valid.misc = c("adjust","alpha","avgd.over","by.vars","delta","df",
         "initMesg","estName","estType","famSize","infer","inv.lbl",
-        "level","methdesc","null","predict.type","pri.vars","side","tran","tran.mult","tran2")
+        "level","methdesc","nesting","null","predict.type","pri.vars","side","tran","tran.mult","tran2")
     valid.slots = slotNames(object)
     valid.choices = union(valid.misc, valid.slots)
     misc = object@misc
@@ -491,7 +506,10 @@ update.ref.grid = function(object, ..., silent = FALSE) {
                     allvars = union(misc$pri.vars, misc$by.vars)
                     misc$by.vars = setdiff(allvars, args[[nm]])
                 }
-                misc[[fullname]] = args[[nm]]
+                if (fullname == "nesting") # special case - I keep nesting in model.info
+                    object@model.info$nesting = args[[nm]]
+                else
+                    misc[[fullname]] = args[[nm]]
             }
         }
     }

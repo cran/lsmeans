@@ -530,7 +530,51 @@ with(nutrition, tapply(gain, race, mean))
 
 
 ###################################################
-### code chunk number 79: using-lsmeans.rnw:813-817
+### code chunk number 79: using-lsmeans.rnw:816-823
+###################################################
+cows = data.frame (
+    route = factor(rep(c("injection", "oral"), c(5, 9))),
+    drug = factor(rep(c("Bovineumab", "Charloisazepam", 
+              "Angustatin", "Herefordmycin", "Mollycoddle"), c(3,2,  4,2,3))),
+    resp = c(34, 35, 34, 44, 43, 36, 33, 36, 32, 26, 25, 25, 24, 24)
+)
+cows.lm <- lm(resp ~ route + drug, data = cows)
+
+
+###################################################
+### code chunk number 80: using-lsmeans.rnw:826-827
+###################################################
+( cows.rg <- ref.grid(cows.lm) )
+
+
+###################################################
+### code chunk number 81: using-lsmeans.rnw:831-832
+###################################################
+( route.lsm <- lsmeans(cows.rg, "route") )
+
+
+###################################################
+### code chunk number 82: using-lsmeans.rnw:835-836
+###################################################
+( drug.lsm <- lsmeans(cows.rg, "drug") )
+
+
+###################################################
+### code chunk number 83: using-lsmeans.rnw:839-841
+###################################################
+pairs(route.lsm, reverse = TRUE)
+pairs(drug.lsm, by = "route", reverse = TRUE)
+
+
+###################################################
+### code chunk number 84: using-lsmeans.rnw:846-848 (eval = FALSE)
+###################################################
+## lsmeans(city.model, "county", 
+##         nesting = list(county = "state", city = c("county", "state")))
+
+
+###################################################
+### code chunk number 85: using-lsmeans.rnw:857-861
 ###################################################
 library("mediation")
 levels(framing$educ) = c("NA","Ref","< HS", "HS", "> HS","Coll +")
@@ -539,34 +583,34 @@ framing.glm = glm(cong_mesg ~ age + income + educ + emo + gender * factor(treat)
 
 
 ###################################################
-### code chunk number 80: framinga
+### code chunk number 86: framinga
 ###################################################
 lsmip(framing.glm, treat ~ educ | gender, type = "response")
 
 
 ###################################################
-### code chunk number 81: framingb
+### code chunk number 87: framingb
 ###################################################
 lsmip(framing.glm, treat ~ educ | gender, type = "response",
       cov.reduce = emo ~ treat*gender + age + educ + income)
 
 
 ###################################################
-### code chunk number 82: using-lsmeans.rnw:845-847
+### code chunk number 88: using-lsmeans.rnw:889-891
 ###################################################
 ref.grid(framing.glm, 
     cov.reduce = emo ~ treat*gender + age + educ + income)@grid
 
 
 ###################################################
-### code chunk number 83: using-lsmeans.rnw:878-880 (eval = FALSE)
+### code chunk number 89: using-lsmeans.rnw:922-924 (eval = FALSE)
 ###################################################
 ## rg <- ref.grid(my.model, at = list(x1 = c(5,10,15)),
 ##                cov.reduce = list(x2 ~ x1,  x3 ~ x1 + x2))
 
 
 ###################################################
-### code chunk number 84: housing-plot
+### code chunk number 90: housing-plot
 ###################################################
 library("ordinal")
 data(housing, package = "MASS")
@@ -576,39 +620,39 @@ lsmip(housing.clm, Cont ~ Infl | Type, layout = c(4,1))
 
 
 ###################################################
-### code chunk number 85: using-lsmeans.rnw:932-933
+### code chunk number 91: using-lsmeans.rnw:976-977
 ###################################################
 test(pairs(lsmeans(housing.clm, ~ Infl | Type)), joint = TRUE)
 
 
 ###################################################
-### code chunk number 86: using-lsmeans.rnw:936-937
+### code chunk number 92: using-lsmeans.rnw:980-981
 ###################################################
 test(pairs(lsmeans(housing.clm, ~ Cont | Type)), joint = TRUE)
 
 
 ###################################################
-### code chunk number 87: using-lsmeans.rnw:942-943
+### code chunk number 93: using-lsmeans.rnw:986-987
 ###################################################
 ref.grid(housing.clm, mode = "cum.prob")
 
 
 ###################################################
-### code chunk number 88: using-lsmeans.rnw:946-948
+### code chunk number 94: using-lsmeans.rnw:990-992
 ###################################################
 lsmeans(housing.clm, ~ Infl, at = list(cut = "Medium|High"), 
         mode = "cum.prob")
 
 
 ###################################################
-### code chunk number 89: using-lsmeans.rnw:951-953
+### code chunk number 95: using-lsmeans.rnw:995-997
 ###################################################
 summary(lsmeans(housing.clm, ~ Infl, at = list(cut = "Medium|High"), 
                 mode = "linear.predictor"), type = "response")
 
 
 ###################################################
-### code chunk number 90: using-lsmeans.rnw:961-969
+### code chunk number 96: using-lsmeans.rnw:1005-1013
 ###################################################
 require("nlme")
 options(contrasts = c("contr.treatment", "contr.poly"))
@@ -621,14 +665,14 @@ Chick.nlme
 
 
 ###################################################
-### code chunk number 91: using-lsmeans.rnw:972-974
+### code chunk number 97: using-lsmeans.rnw:1016-1018
 ###################################################
 cld(lsmeans(Chick.nlme, ~ Diet, param = "asym"))    
 cld(lsmeans(Chick.nlme, ~ Diet, param = "xmid"))    
 
 
 ###################################################
-### code chunk number 92: using-lsmeans.rnw:986-991
+### code chunk number 98: using-lsmeans.rnw:1030-1035
 ###################################################
 library("MCMCpack")
 counts <- c(18, 17, 15,   20, 10, 20,   25, 13, 12)
@@ -638,13 +682,13 @@ posterior <- MCMCpoisson(counts ~ outcome + treatment, mcmc = 1000)
 
 
 ###################################################
-### code chunk number 93: using-lsmeans.rnw:994-995
+### code chunk number 99: using-lsmeans.rnw:1038-1039
 ###################################################
 ( post.lsm <- lsmeans(posterior, "treatment") )
 
 
 ###################################################
-### code chunk number 94: using-lsmeans.rnw:998-1000
+### code chunk number 100: using-lsmeans.rnw:1042-1044
 ###################################################
 library("coda")
 summary(as.mcmc(post.lsm))
