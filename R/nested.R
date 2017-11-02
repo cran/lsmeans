@@ -91,6 +91,7 @@
             result@levels[grpfacs[j]] = rgobj@levels[grpfacs[j]]
         
         result@misc$avgd.over = setdiff(union(result@misc$avgd.over, avg.over), gspecs)
+        result@misc$display = NULL
         nkeep = intersect(names(nesting), names(result@levels))
         if (length(nkeep) > 0)
             result@model.info$nesting = nesting[nkeep]
@@ -199,31 +200,38 @@
 #     trms$factors
 # The function returns a named list, e.g., list(A = "B")
 # If none found, an empty list is returned.
-.find_nests = function(grid, trms) {
+.find_nests = function(grid, trms, levels) {
     result = list()
-    nms = names(grid)[sapply(grid, is.factor)]
+    
+    # only consider cases where levels has length > 1
+    lng = sapply(levels, length)
+    nms = names(levels[lng > 1])
     if (length(nms) < 2)
         return (result)
     g = grid[grid$.wgt. > 0, nms, drop = FALSE]
     for (nm in nms) {
-        x = levels(g[[nm]])
-###        x = x[x != ".nref."]     # ignore reference level from nested()
-        otrs = nms[!(nms == nm)]
+        x = levels[[nm]]
+        # exclude other factors this is already nested in
+        excl = sapply(names(result), function(lnm)
+            ifelse(nm %in% result[[lnm]], lnm, ""))
+        otrs = setdiff(nms[!(nms == nm)], excl)
         max.levs = sapply(otrs, function(n) {
             max(sapply(x, function(lev) length(unique(g[[n]][g[[nm]] == lev]))))
         })
-        if (any(max.levs == 1))
+        if (any(max.levs == 1)) 
             result[[nm]] = otrs[max.levs == 1]
     }
     
     # Now look at factors attribute
     fac = attr(trms, "factors")
-    fac = fac[intersect(nms, row.names(fac)), , drop = FALSE]
-    for (j in seq_len(ncol(fac))) {
-        if (any(fac[, j] == 2)) {
-            nst = nms[fac[, j] == 1]
-            for (nm in nst)
-                result[[nm]] = nms[fac[, j] == 2]
+    if (!is.null(fac)) {
+        fac = fac[intersect(nms, row.names(fac)), , drop = FALSE]
+        for (j in seq_len(ncol(fac))) {
+            if (any(fac[, j] == 2)) {
+                nst = nms[fac[, j] == 1]
+                for (nm in nst)
+                    result[[nm]] = nms[fac[, j] == 2]
+            }
         }
     }
     
@@ -235,10 +243,91 @@
     if (length(nlist) == 0)
         "none"
     else {
-        tmp = lapply(nlist, function(x) paste(x, collapse = "*"))
+        tmp = lapply(nlist, function(x) 
+            if (length(x) == 1) x
+            else                paste0("(", paste(x, collapse = "*"), ")")
+        )
         paste(sapply(names(nlist), function (nm) paste0(nm, " %in% ", tmp[[nm]])),
               collapse = ", ")
     }
+}
+
+# internal function to parse a nesting string & return a list
+# spec can be a named list, character vector    ####, or formula
+.parse_nest = function(spec) {
+    if (is.null(spec))
+        return(NULL)
+    if (is.list(spec))
+        return (spec)
+    result = list()
+    # break up any comma delimiters
+    spec = trimws(unlist(strsplit(spec, ",")))
+    for (s in spec) {
+        parts = strsplit(s, "[ ]+%in%[ ]+")[[1]]
+        grp = .all.vars(stats::reformulate(parts[2]))
+        result[[parts[[1]]]] = grp
+    }
+    if(length(result) == 0)
+        result = NULL
+    result
+}
+
+
+### Create a grouping factor and add it to a ref grid
+# object  - a ref.grid
+# newname - name of new factor to be created
+# refname - name of existing factor that will be nested in new factor
+# newlevs   - corresponding levels of new factor (length = # levels of ref factor)
+#           (make newlevs a factor if you want levels in a particular order)
+add_grouping = function(object, newname, refname, newlevs) {
+    if(!is.null(object@model.info$nesting[[refname]]))
+        stop("'", refname, "' is already nested in another factor; cannot re-group it")
+    rlevs = object@levels[[refname]]
+    if (length(newlevs) != length(rlevs))
+        stop("Length of 'newlevs' doesn't match # levels of '", refname, "'")
+    newlevs = factor(newlevs)
+    glevs = levels(newlevs)
+    k = length(glevs)
+    
+    one = matrix(1, nrow = k, ncol = 1)
+    object@linfct = kronecker(one, object@linfct)
+    object@levels[[newname]] = glevs
+    
+    wgt = object@grid$.wgt.
+    offset = object@grid$.offset.
+    ogrid = object@grid[setdiff(names(object@grid), c(".wgt.", ".offset."))]
+    grid = data.frame()
+    valid = logical(0) # flag for rows that make sense
+    for (i in 1:k) {
+        g = ogrid
+        g[[newname]] = glevs[i]
+        g$.wgt. = wgt
+        g$.offset. = offset
+        grid = rbind(grid, g)
+        alevs = rlevs[newlevs == glevs[i]]
+        valid = c(valid, g[[refname]] %in% alevs)
+    }
+    # screen out invalid rows
+    grid[!valid, ".wgt."] = 0
+    object@linfct[!valid, ] = NaN
+    object@misc$pri.vars = c(object@misc$pri.vars, newname)
+    if(is.null(disp <- object@misc$display))
+        object@misc$display = valid
+    else
+        object@misc$display = disp & valid
+    object@grid = grid
+    
+    # update nesting structure
+    nesting = object@model.info$nesting
+    if (is.null(nesting))
+        nesting = list()
+    for (nm in names(nesting))
+        if (refname %in% nesting[[nm]])
+            nesting[[nm]] = c(nesting[[nm]], newname)
+    nesting[[refname]] = newname
+    object@model.info$nesting = nesting
+    
+    object
 }
 
 

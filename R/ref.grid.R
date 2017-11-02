@@ -282,7 +282,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     
     model.info = list(call = attr(data,"call"), terms = trms, xlev = xlev)
     # Detect any nesting structures
-    nst = .find_nests(grid, trms)
+    nst = .find_nests(grid, trms, ref.levels)
     if (length(nst) > 0)
         model.info$nesting = nst
 
@@ -315,7 +315,7 @@ ref.grid <- function(object, at, cov.reduce = mean, mult.name, mult.levs,
     }
     
     if (!missing(nesting))
-        result@model.info$nesting = nesting
+        result@model.info$nesting = .parse_nest(nesting)
 
     if(!is.null(options)) {
         options$object = result
