@@ -1,13 +1,13 @@
-ef19a9cb2bb0912de6f7b816c7637581 *DESCRIPTION
+67604df2496e5bcc93c9b9372cba2eed *DESCRIPTION
 2dd0410db3d7c83ed40d324589a92e9c *NAMESPACE
 0c7544689fa308a2cfdf39597cd51c47 *R/MCMC-support.R
 b6aeea0c61ba42efc7238c12eb473c7e *R/S4-classes.R
-5743943bb304a49b93fb4d084c8bfae9 *R/aovlist-support.R
+7e7d476ad3a25aa9c621a185a2651dba *R/aovlist-support.R
 6873bb0b8efa62a28acdeba28783ad5a *R/betareg.support.R
 10454c0bcf829647554a68b7cd7dc169 *R/cld.lsm.R
 4a61d785b8e3d0c7fa376859feec17dd *R/countreg-support.R
 818e51949363aea61de4e8e1c5964661 *R/glht-support.R
-a1b387e74191410af681759cdbb235e4 *R/helpers.R
+14cd61471a02703d30bfea86e6784be3 *R/helpers.R
 c965210689c5dffbbb86fca1598c811e *R/lsm-contr.R
 c904945997d5ca634c2f22e4e695f63f *R/lsm.list.R
 526e0e9d57e133ddb508299f7da7abfc *R/lsmeans.R
@@ -28,7 +28,7 @@ de86df367c732c5d034918c0b16a9b52 *R/summary.R
 0d4573046b69b973df22a82fd08cb16a *R/xtable-method.R
 3a51303fe4c11415911871137502290b *R/zzz.R
 019034d6abc413f009ad344a5fbf5849 *README.md
-fd0a1ef360ec2a5a2c85d2612073526c *build/vignette.rds
+19834a48ce58aacd66cd160c436235f9 *build/vignette.rds
 dd8a9e9e6180f65bff84a40f25943636 *data/MOats.RData
 2d7a1d217def5e4ab094c7f019a7d27d *data/autonoise.RData
 991422f691ec5cdee38ab0d613e2a89c *data/feedlot.RData
@@ -36,9 +36,9 @@ f204c1431e151e2459178e8f4fc8f0e8 *data/fiber.RData
 298a5159a77e201ffe1410cf80282eff *data/nutrition.RData
 2b03398ef2214b51371430e875d964cc *data/oranges.RData
 35e5174543eefde1753d492066cf016f *inst/CITATION
-d7cc18c694229a8aa93d04dbdabe1d5e *inst/NEWS
+e6033af404ab0d05153902fd700533d3 *inst/NEWS
 f6316a1bdad5e2cb434c307cd596ca83 *inst/doc/using-lsmeans.R
-c954c6d7e31bf979797d1c7879894f04 *inst/doc/using-lsmeans.pdf
+f47f9e8710be2a13a6378d2ac7258794 *inst/doc/using-lsmeans.pdf
 aac32e5e0203635156cee0096c07fa2d *inst/doc/using-lsmeans.rnw
 7a453bfdd15f1ea178c3b38639af07a1 *man/MOats.Rd
 efed4c40d321ca3a773c9216cb917c9f *man/auto.noise.Rd

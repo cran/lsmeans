@@ -1,8 +1,8 @@
 Package: lsmeans
 Type: Package
 Title: Least-Squares Means
-Version: 2.27-60
-Date: 2017-11-01
+Version: 2.27-61
+Date: 2017-11-05
 Authors@R: c(person("Russell", "Lenth", role = c("aut", "cre", "cph"), 
     email = "russell-lenth@uiowa.edu"),
     person("Jonathon", "Love", role = "ctb"))
@@ -30,9 +30,9 @@ Description: Obtain least-squares means for many linear, generalized linear,
     as 'lsmeans' will be archived in the not-too-distant future.
 License: GPL-2 | GPL-3
 NeedsCompilation: no
-Packaged: 2017-11-01 17:55:58 UTC; rlenth
+Packaged: 2017-11-04 20:55:44 UTC; rlenth
 Author: Russell Lenth [aut, cre, cph],
   Jonathon Love [ctb]
 Maintainer: Russell Lenth <russell-lenth@uiowa.edu>
 Repository: CRAN
-Date/Publication: 2017-11-02 01:02:45 UTC
+Date/Publication: 2017-11-05 15:03:26 UTC
